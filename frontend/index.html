@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教材管理系统</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fustat:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Toast 通知容器 -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <div id="app">
+        <!-- ============================================================
+        登录页面
+        ============================================================ -->
+        <div id="loginPage" class="login-page-full">
+            <div class="login-hero">
+                <!-- 左侧装饰文字 -->
+                <div class="login-hero-left">
+                    <div class="login-brand">
+                        <h1 class="login-brand-title">教材管理系统</h1>
+                        <p class="login-brand-subtitle">TextBook Management System</p>
+                        <p class="login-brand-desc">高效管理教材库存，轻松追踪出入库记录</p>
+                    </div>
+                    <!-- 三列装饰性统计数字 -->
+                    <div class="login-stats">
+                        <div class="login-stat-item">
+                            <span class="login-stat-number">500+</span>
+                            <span class="login-stat-label">教材种类</span>
+                        </div>
+                        <div class="login-stat-divider"></div>
+                        <div class="login-stat-item">
+                            <span class="login-stat-number">50+</span>
+                            <span class="login-stat-label">合作出版社</span>
+                        </div>
+                        <div class="login-stat-divider"></div>
+                        <div class="login-stat-item">
+                            <span class="login-stat-number">99.9%</span>
+                            <span class="login-stat-label">库存准确率</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- 右侧登录表单 -->
+                <div class="login-hero-right">
+                    <div class="login-card-glass">
+                        <div class="login-card-header">
+                            <h2>欢迎登录</h2>
+                            <p>请输入您的账号信息</p>
+                        </div>
+                        <form id="loginForm">
+                            <div class="form-group">
+                                <label for="username">用户名</label>
+                                <input type="text" id="username" name="username" class="form-control" placeholder="请输入用户名" value="admin">
+                            </div>
+                            <div class="form-group">
+                                <label for="password">密码</label>
+                                <input type="password" id="password" name="password" class="form-control" placeholder="请输入密码" value="123456">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block login-submit-btn">登 录</button>
+                        </form>
+                        <p class="login-hint">账号: admin(管理员) / demander(需求) / stockop(库存) / viewer(只读) — 密码均为 123456（admin 为 admin123）</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        首页欢迎屏
+        ============================================================ -->
+        <div id="homePage" class="home-page" style="display: none;">
+            <div class="home-bg"></div>
+            <div class="home-bg-clear"></div>
+            <div class="home-vignette"></div>
+            <div class="home-corner-title">TextBook</div>
+            <div class="home-corner-line"></div>
+            <div class="home-center">
+                <h1 class="home-main-title">教材管理系统</h1>
+                <p class="home-subtitle">TextBookManagement</p>
+            </div>
+            <div class="home-enter-btn" id="homeEnterBtn">
+                <div class="enter-ring outer"></div>
+                <div class="enter-ring inner"></div>
+            </div>
+            <div class="home-enter-text" id="homeEnterText">Click To Enter</div>
+        </div>
+
+        <!-- ============================================================
+        主应用界面
+        ============================================================ -->
+        <div id="appMain" class="app-main" style="display: none;">
+            <!-- 导航栏：初始全宽透明，滚动后收缩为居中胶囊 -->
+            <nav id="liquidNavbar" class="liquid-navbar">
+                <div class="liquid-navbar-inner">
+                    <div class="liquid-nav-left">
+                        <span class="liquid-nav-logo">TextBook</span>
+                    </div>
+                    <div class="liquid-nav-center">
+                        <div class="nav-indicator" id="navIndicator"></div>
+                        <span id="dynamicNavLinks">
+                            <!-- 导航链接由 router.js 根据权限动态渲染 -->
+                        </span>
+                    </div>
+                    <div class="liquid-nav-right">
+                        <span class="liquid-nav-user" id="userDisplayNav">未登录</span>
+                        <button id="logoutBtnNav" class="liquid-btn-logout">
+                            <span>退出登录</span>
+                            <svg class="logout-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                <polyline points="16 17 21 12 16 7"/>
+                                <line x1="21" y1="12" x2="9" y2="12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- 单页滚动主内容区：页面由 router.js 动态渲染到 #page-container -->
+            <main id="main-content" class="main-content">
+                <div id="page-container">
+                    <!-- 页面内容由 JavaScript 动态加载 -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 引入 JavaScript 文件 -->
+    <script src="js/api.js"></script>
+    <script src="js/router.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
