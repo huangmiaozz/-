@@ -536,7 +536,8 @@ async function initAllSections() {
         initPublishersPage(),
         initStockInPage(),
         initStockOutPage(),
-        initOrdersPage()
+        initOrdersPage(),
+        initUsersPage()
     ]);
 }
 
@@ -1793,6 +1794,133 @@ function closeAllModals() {
  * 将所有 .modal-overlay 移到 body 末尾
  * 解决父元素 CSS transform 导致 position:fixed 参考系偏移的问题
  */
+// ============================================================
+// 6. 用户管理页面（仅 Admin 可见）
+// ============================================================
+
+/**
+ * 初始化用户管理页面
+ */
+async function initUsersPage() {
+    if (!hasPermission('user:view')) return;
+
+    await loadUserList();
+
+    // 添加用户按钮
+    const addUserBtn = document.getElementById('addUserBtn');
+    const userModal = document.getElementById('addUserModal');
+    const userModalClose = document.getElementById('userModalClose');
+    const userModalCancel = document.getElementById('userModalCancel');
+    const addUserForm = document.getElementById('addUserForm');
+
+    if (addUserBtn && userModal) {
+        addUserBtn.addEventListener('click', () => {
+            userModal.classList.add('show');
+        });
+    }
+
+    if (userModalClose) userModalClose.addEventListener('click', () => userModal.classList.remove('show'));
+    if (userModalCancel) userModalCancel.addEventListener('click', () => userModal.classList.remove('show'));
+    if (userModal) {
+        userModal.addEventListener('click', (e) => {
+            if (e.target === userModal) userModal.classList.remove('show');
+        });
+    }
+
+    // 提交添加用户表单
+    if (addUserForm) {
+        addUserForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(addUserForm);
+
+            const params = {
+                username: formData.get('username'),
+                password: formData.get('password'),
+                displayName: formData.get('displayName'),
+                roleName: formData.get('roleName')
+            };
+
+            const result = await addUserApi(params);
+            if (result.code === 200) {
+                showMessage('用户创建成功', 'success');
+                userModal.classList.remove('show');
+                addUserForm.reset();
+                await loadUserList();
+            } else {
+                showMessage(result.message || '创建失败', 'error');
+            }
+        });
+    }
+}
+
+/**
+ * 加载用户列表
+ */
+async function loadUserList() {
+    const tbody = document.getElementById('userTableBody');
+    if (!tbody) return;
+
+    try {
+        const result = await getUserListApi();
+        if (result.code !== 200 || !result.data) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>加载失败</p></td></tr>';
+            return;
+        }
+
+        const users = result.data;
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>暂无用户</p></td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = users.map(u => `
+            <tr>
+                <td>${u.userId}</td>
+                <td><strong>${u.username}</strong></td>
+                <td>${u.displayName}</td>
+                <td><span class="role-badge role-${(u.roleName || '').toLowerCase()}">${u.roleDisplayName || u.roleName || '未分配'}</span></td>
+                <td>${u.isActive ? '✅ 启用' : '❌ 禁用'}</td>
+                <td>${formatDate(u.createdAt)}</td>
+                <td>
+                    <button class="btn btn-sm btn-delete-user" data-user-id="${u.userId}" data-username="${u.username}"
+                            data-permission="user:delete"
+                            style="background: rgba(239,68,68,0.08); color: #ef4444;">删除</button>
+                </td>
+            </tr>
+        `).join('');
+
+        // 绑定删除按钮
+        tbody.querySelectorAll('.btn-delete-user').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const userId = parseInt(this.dataset.userId);
+                const username = this.dataset.username;
+                if (confirm('确定要删除用户 "' + username + '" 吗？此操作不可撤销。')) {
+                    const result = await deleteUserApi(userId);
+                    if (result.code === 200) {
+                        showMessage('用户 "' + username + '" 已删除', 'info');
+                        await loadUserList();
+                    } else {
+                        showMessage(result.message || '删除失败', 'error');
+                    }
+                }
+            });
+        });
+
+        applyPermissionVisibility();
+    } catch (error) {
+        console.error('加载用户列表失败:', error);
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>加载失败</p></td></tr>';
+    }
+}
+
+/**
+ * 格式化日期字符串，去掉 T 和毫秒部分
+ */
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    return dateStr.replace('T', ' ').substring(0, 19);
+}
+
 function moveModalsToBody() {
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         document.body.appendChild(modal);
@@ -1821,14 +1949,14 @@ async function initOrdersPage() {
         container.innerHTML = result.data.map(o => `
             <div class="history-card reveal">
                 <div class="history-card-header">
-                    <span class="history-id">#${o.orderId}</span>
-                    <span>📅 ${o.orderDate}</span>
-                    <span>👤 ${o.operatorName}</span>
+                    <span class="history-id">#${o.OrderId}</span>
+                    <span>📅 ${o.OrderDate}</span>
+                    <span>👤 ${o.OperatorName}</span>
                 </div>
                 <table class="demand-detail-table">
                     <thead><tr><th>教材名称</th><th>订购数量</th></tr></thead>
                     <tbody>
-                        ${(o.details || []).map(d => `<tr><td>${d.bookname}</td><td>${d.quantity}</td></tr>`).join('')}
+                        ${(o.details || []).map(d => `<tr><td>${d.Bookname}</td><td>${d.Quantity}</td></tr>`).join('')}
                     </tbody>
                 </table>
             </div>

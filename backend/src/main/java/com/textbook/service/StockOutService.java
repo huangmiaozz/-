@@ -9,6 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 出库管理 Service — 对应前端 addStockOutApi()
@@ -50,5 +54,42 @@ public class StockOutService {
         for (StockOutDTO.StockOutDetailItem item : dto.getDetails()) {
             jdbc.update(detailSql, stockOutId, item.getBookId(), item.getQuantity());
         }
+    }
+
+    /**
+     * 查询出库历史记录（含明细）
+     *
+     * @return [{ stockOutId, stockOutDate, operatorName, details: [{ bookname, quantity }] }]
+     */
+    public List<Map<String, Object>> listHistory() {
+        String masterSql = """
+            SELECT so.StockOutId, so.StockOutDate, u.DisplayName AS OperatorName
+            FROM StockOut so
+            JOIN Users u ON so.Operator = u.UserId
+            ORDER BY so.StockOutId DESC
+            """;
+
+        List<Map<String, Object>> result = jdbc.query(masterSql, (rs, rowNum) -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("stockOutId", rs.getInt("StockOutId"));
+            map.put("stockOutDate", rs.getString("StockOutDate"));
+            map.put("operatorName", rs.getString("OperatorName"));
+            map.put("details", new ArrayList<>());
+            return map;
+        });
+
+        for (Map<String, Object> record : result) {
+            int stockOutId = (int) record.get("stockOutId");
+            String detailSql = """
+                SELECT tb.Bookname, sod.Quantity
+                FROM StockOutDetails sod
+                JOIN TextBooks tb ON sod.BookId = tb.BookId
+                WHERE sod.StockOutId = ?
+                """;
+            List<Map<String, Object>> details = jdbc.queryForList(detailSql, stockOutId);
+            record.put("details", details);
+        }
+
+        return result;
     }
 }

@@ -294,14 +294,23 @@ GO
 
 -- ==================== 角色-权限分配 ====================
 
--- Admin：所有权限
+-- Admin：系统管理员（仅用户管理 + 角色管理 + 全局只读，不做业务操作）
 INSERT INTO RolePermissions (RoleId, PermissionId)
 SELECT r.RoleId, p.PermissionId
 FROM Roles r, Permissions p
-WHERE r.RoleName = 'Admin';
+WHERE r.RoleName = 'Admin'
+  AND p.PermissionCode IN (
+      -- 全局查看
+      'book:view', 'demand:view', 'order:view', 'stockin:view', 'stockout:view',
+      'publisher:view', 'statistics:view',
+      -- 用户管理
+      'user:view', 'user:create', 'user:edit', 'user:delete',
+      -- 角色管理
+      'role:manage'
+  );
 GO
 
--- DemandProvider：需求管理 CRUD + 教材查看 + 出版社查看/添加/删除 + 统计查看
+-- DemandProvider：需求管理 CRUD + 教材查看 + 出版社管理 + 统计查看
 INSERT INTO RolePermissions (RoleId, PermissionId)
 SELECT r.RoleId, p.PermissionId
 FROM Roles r, Permissions p
@@ -312,12 +321,12 @@ WHERE r.RoleName = 'DemandProvider'
       'order:view',
       'stockin:view',
       'stockout:view',
-      'publisher:view', 'publisher:create', 'publisher:delete',
+      'publisher:view', 'publisher:create', 'publisher:edit', 'publisher:delete',
       'statistics:view'
   );
 GO
 
--- StockOperator：教材 CRUD + 订购 CRUD + 入库 CRUD + 出库 CRUD + 需求查看 + 出版社查看/添加/删除 + 统计查看
+-- StockOperator：教材 CRUD + 订购 CRUD + 入库 CRUD + 出库 CRUD + 需求查看 + 出版社管理 + 统计查看
 INSERT INTO RolePermissions (RoleId, PermissionId)
 SELECT r.RoleId, p.PermissionId
 FROM Roles r, Permissions p
@@ -328,7 +337,7 @@ WHERE r.RoleName = 'StockOperator'
       'order:view', 'order:create', 'order:edit', 'order:delete',
       'stockin:view', 'stockin:create', 'stockin:edit', 'stockin:delete',
       'stockout:view', 'stockout:create', 'stockout:edit', 'stockout:delete',
-      'publisher:view', 'publisher:create', 'publisher:delete',
+      'publisher:view', 'publisher:create', 'publisher:edit', 'publisher:delete',
       'statistics:view'
   );
 GO

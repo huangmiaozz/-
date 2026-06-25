@@ -7,6 +7,9 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * 出库管理 Controller — 对应前端 api.js 中的 addStockOutApi()
  */
@@ -34,5 +37,14 @@ public class StockOutController {
     public Result<Void> add(@RequestBody @Valid StockOutDTO dto) {
         stockOutService.add(dto);
         return Result.success("出库成功");
+    }
+
+    /**
+     * 查询出库历史（仅 Admin 可见）
+     */
+    @GetMapping
+    @PreAuthorize("hasAuthority('role:manage')")
+    public Result<List<Map<String, Object>>> listHistory() {
+        return Result.success(stockOutService.listHistory());
     }
 }

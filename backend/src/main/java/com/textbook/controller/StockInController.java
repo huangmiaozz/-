@@ -7,6 +7,9 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * 入库管理 Controller — 对应前端 api.js 中的 addStockInApi()
  */
@@ -32,5 +35,14 @@ public class StockInController {
     public Result<Void> add(@RequestBody @Valid StockInDTO dto) {
         stockInService.add(dto);
         return Result.success("入库成功");
+    }
+
+    /**
+     * 查询入库历史（仅 Admin 可见）
+     */
+    @GetMapping
+    @PreAuthorize("hasAuthority('role:manage')")
+    public Result<List<Map<String, Object>>> listHistory() {
+        return Result.success(stockInService.listHistory());
     }
 }

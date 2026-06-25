@@ -6,6 +6,7 @@ import com.textbook.model.dto.UserInfoVO;
 import com.textbook.model.entity.User;
 import com.textbook.util.JwtUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,7 +15,7 @@ import java.util.List;
  * 认证 Service — 对应前端 api.js 中的 loginApi()
  *
  * 流程:
- * 1. 查 Users 表验证用户名密码
+ * 1. 查 Users 表验证用户名密码（BCrypt 加密比对）
  * 2. 查 UserRoles + Roles 表获取角色
  * 3. 查 RolePermissions + Permissions 表获取权限列表
  * 4. 用 JwtUtil 生成 Token
@@ -25,10 +26,12 @@ public class AuthService {
 
     private final JdbcTemplate jdbc;
     private final JwtUtil jwtUtil;
+    private final PasswordEncoder passwordEncoder;
 
-    public AuthService(JdbcTemplate jdbc, JwtUtil jwtUtil) {
+    public AuthService(JdbcTemplate jdbc, JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
         this.jdbc = jdbc;
         this.jwtUtil = jwtUtil;
+        this.passwordEncoder = passwordEncoder;
     }
 
     /**
@@ -62,8 +65,9 @@ public class AuthService {
             throw new IllegalArgumentException("该账号已被禁用");
         }
 
-        // 验证密码（当前数据库存的是明文，后续改为 BCrypt 比对）
-        if (!user.getPassword().equals(dto.getPassword())) {
+        // 验证密码：BCrypt 优先，兼容旧明文密码（过渡期）
+        if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())
+                && !user.getPassword().equals(dto.getPassword())) {
             throw new IllegalArgumentException("用户名或密码错误");
         }
 

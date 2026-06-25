@@ -1790,14 +1790,6 @@ input[type="number"] {
     letter-spacing: 1px;
 }
 
-.login-hint {
-    text-align: center;
-    margin-top: var(--spacing-md);
-    font-size: 12px;
-    color: var(--text-muted);
-    font-family: 'Inter', sans-serif;
-}
-
 /* ============================================================
    导航栏
    sticky 定位，初始全宽透明，滚动后收缩为居中胶囊 + 玻璃拟态
@@ -2657,24 +2649,33 @@ input[type="number"] {
 }
 
 /* ============================================================
-   权限不足元素样式：降低不透明度 + 禁止点击 + 锁图标
+   权限不足元素样式：禁用交互 + 降低不透明度 + 锁图标
    ============================================================ */
 .no-permission {
-    opacity: 0.45;
+    opacity: 0.4;
     cursor: not-allowed !important;
+    pointer-events: none !important;
     position: relative;
 }
 
 .no-permission:hover {
-    opacity: 0.55;
+    opacity: 0.4;
 }
 
-/* 按钮无权限时 hover 不应用原有交互效果 */
-button.no-permission:hover,
-.btn.no-permission:hover {
+/* 按钮/表单元素无权限时：彻底禁止交互 + 灰色调 */
+button.no-permission,
+.btn.no-permission,
+input.no-permission,
+select.no-permission,
+textarea.no-permission {
+    opacity: 0.4;
+    pointer-events: none !important;
     transform: none !important;
     box-shadow: none !important;
-    filter: none !important;
+    filter: grayscale(0.6);
+    background: rgba(0, 0, 0, 0.04) !important;
+    color: #a0aec0 !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
 /* ============================================================
@@ -2907,4 +2908,36 @@ button.no-permission:hover,
 /* 大模态框 */
 .modal-lg {
     max-width: 700px;
+}
+
+/* ============================================================
+   角色徽章样式
+   ============================================================ */
+.role-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+.role-badge.role-admin {
+    background: rgba(102, 126, 234, 0.12);
+    color: #667eea;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+.role-badge.role-stockoperator {
+    background: rgba(72, 187, 120, 0.12);
+    color: #38a169;
+    border: 1px solid rgba(72, 187, 120, 0.3);
+}
+.role-badge.role-demandprovider {
+    background: rgba(237, 137, 54, 0.12);
+    color: #dd6b20;
+    border: 1px solid rgba(237, 137, 54, 0.3);
+}
+.role-badge.role-viewer {
+    background: rgba(160, 174, 192, 0.12);
+    color: #718096;
+    border: 1px solid rgba(160, 174, 192, 0.3);
 }

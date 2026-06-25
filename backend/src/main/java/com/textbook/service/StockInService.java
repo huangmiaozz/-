@@ -9,6 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 入库管理 Service — 对应前端 addStockInApi()
@@ -53,5 +57,44 @@ public class StockInService {
         for (StockInDTO.StockInDetailItem item : dto.getDetails()) {
             jdbc.update(detailSql, stockInId, item.getBookId(), item.getQuantity());
         }
+    }
+
+    /**
+     * 查询入库历史记录（含明细）
+     *
+     * @return [{ stockInId, stockInDate, operatorName, details: [{ bookname, quantity }] }]
+     */
+    public List<Map<String, Object>> listHistory() {
+        // 查询所有入库主记录
+        String masterSql = """
+            SELECT si.StockInId, si.StockInDate, u.DisplayName AS OperatorName
+            FROM StockIn si
+            JOIN Users u ON si.Operator = u.UserId
+            ORDER BY si.StockInId DESC
+            """;
+
+        List<Map<String, Object>> result = jdbc.query(masterSql, (rs, rowNum) -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("stockInId", rs.getInt("StockInId"));
+            map.put("stockInDate", rs.getString("StockInDate"));
+            map.put("operatorName", rs.getString("OperatorName"));
+            map.put("details", new ArrayList<>());
+            return map;
+        });
+
+        // 查询每条主记录的明细
+        for (Map<String, Object> record : result) {
+            int stockInId = (int) record.get("stockInId");
+            String detailSql = """
+                SELECT tb.Bookname, sid.Quantity
+                FROM StockInDetails sid
+                JOIN TextBooks tb ON sid.BookId = tb.BookId
+                WHERE sid.StockInId = ?
+                """;
+            List<Map<String, Object>> details = jdbc.queryForList(detailSql, stockInId);
+            record.put("details", details);
+        }
+
+        return result;
     }
 }

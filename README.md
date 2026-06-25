@@ -1,6 +1,9 @@
 # 📚 教材管理系统 (TextBook Management System)
 
-一个基于 **Spring Boot 3.2 + SQL Server** 的教材进销存管理系统，前端为纯 HTML/CSS/JS 单页应用（SPA），支持教材库存管理、需求追踪、入库出库、订单管理及多角色权限控制。
+一个基于 **Spring Boot 3.2 + SQL Server** 的教材进销存管理系统，前端为纯 HTML/CSS/JS 单页应用（SPA），支持教材库存管理、需求追踪、入库出库、订单管理及多角色 RBAC 权限控制。
+
+> 🔐 **v2.0 更新**：密码 BCrypt 加密存储、Admin 权限精简为系统管理员（仅管人不管事）、用户管理模块上线。
+
 
 ---
 
@@ -33,20 +36,22 @@ TextBookManagement/
 │       │   │   ├── CorsConfig.java              # CORS 跨域配置
 │       │   │   ├── JwtAuthenticationFilter.java  # JWT 认证过滤器
 │       │   │   └── SecurityConfig.java          # Spring Security 安全配置
-│       │   ├── controller/                # REST API 控制器（9 个）
+│       │   ├── controller/                # REST API 控制器（10 个）
 │       │   │   ├── AuthController.java          # 登录认证
 │       │   │   ├── BookController.java          # 教材 CRUD
 │       │   │   ├── DemandController.java        # 需求管理
 │       │   │   ├── OrderController.java         # 订购管理
 │       │   │   ├── PublisherController.java     # 出版社管理
 │       │   │   ├── StatisticsController.java    # 统计报表
-│       │   │   ├── StockInController.java       # 入库操作
-│       │   │   ├── StockOutController.java      # 出库操作
-│       │   │   └── TypeController.java          # 教材类型
+│       │   │   ├── StockInController.java       # 入库操作 + 历史查询
+│       │   │   ├── StockOutController.java      # 出库操作 + 历史查询
+│       │   │   ├── TypeController.java          # 教材类型
+│       │   │   └── UserController.java          # 用户管理（Admin）
 │       │   ├── model/
-│       │   │   ├── dto/                    # 数据传输对象（请求/响应）
+│       │   │   ├── dto/                    # 数据传输对象（请求/响应，含 RegisterDTO）
 │       │   │   └── entity/                 # 数据库实体类（12 个）
-│       │   ├── service/                   # 业务逻辑层（9 个 Service）
+│       │   ├── service/                   # 业务逻辑层（10 个 Service）
+│       │   │   └── UserService.java             # 用户管理（BCrypt 加密 + 角色分配）
 │       │   └── util/                      # 工具类（JWT 等）
 │       └── resources/
 │           └── application.yml            # 数据库连接、JWT 密钥、日志配置
@@ -146,9 +151,9 @@ spring:
 
 | 用户名 | 密码 | 角色 | 权限范围 |
 |--------|------|------|----------|
-| `admin` | `admin123` | 管理员 (Admin) | 全部 29 个权限 |
-| `demander` | `123456` | 需求提出者 (DemandProvider) | 需求管理 + 查看（11 个权限） |
-| `stockop` | `123456` | 库存操作员 (StockOperator) | 教材/订购/入库/出库（19 个权限） |
+| `admin` | `admin123` | 系统管理员 (Admin) | 全局查看 + 用户CRUD + 角色管理（12 个权限） |
+| `stockop` | `123456` | 库存操作员 (StockOperator) | 教材/订购/入库/出库/出版社 CRUD + 查看（17 个权限） |
+| `demander` | `123456` | 需求提出者 (DemandProvider) | 需求管理 + 出版社管理 + 查看（14 个权限） |
 | `viewer` | `123456` | 只读人员 (Viewer) | 仅查看（7 个权限） |
 
 ---
@@ -183,17 +188,19 @@ spring:
 ### 📥 入库管理
 | 方法 | URL | 说明 | 权限 |
 |------|-----|------|------|
+| GET | `/api/stock-in` | 查询入库历史（Admin） | `role:manage` |
 | POST | `/api/stock-in` | 提交入库（触发器自动更新库存） | `stockin:create` |
 
 ### 📤 出库管理
 | 方法 | URL | 说明 | 权限 |
 |------|-----|------|------|
+| GET | `/api/stock-out` | 查询出库历史（Admin） | `role:manage` |
 | POST | `/api/stock-out` | 提交出库（触发器扣库存，不足则回滚） | `stockout:create` |
 
 ### 🛒 订购管理
 | 方法 | URL | 说明 | 权限 |
 |------|-----|------|------|
-| GET | `/api/orders` | 查询所有订购列表 | `order:view` |
+| GET | `/api/orders` | 查询订购历史（Admin） | `role:manage` |
 | POST | `/api/orders` | 创建订购单 | `order:create` |
 | DELETE | `/api/orders/{id}` | 删除订购单 | `order:delete` |
 
@@ -208,6 +215,13 @@ spring:
 | 方法 | URL | 说明 | 权限 |
 |------|-----|------|------|
 | GET | `/api/statistics` | 获取教材订购/入库/出库统计数据 | `statistics:view` |
+
+### 👥 用户管理（Admin）
+| 方法 | URL | 说明 | 权限 |
+|------|-----|------|------|
+| GET | `/api/users` | 获取用户列表（含角色信息） | `user:view` |
+| POST | `/api/users` | 创建用户（BCrypt 加密 + 角色分配） | `user:create` |
+| DELETE | `/api/users/{id}` | 删除用户（级联删除角色关联） | `user:delete` |
 
 ---
 
@@ -249,11 +263,13 @@ Users ──┐
 ```
 Users ──→ UserRoles ──→ Roles ──→ RolePermissions ──→ Permissions
   │                      │
-  │   admin     ──→   Admin           ──→ 所有 29 个权限
-  │   demander  ──→   DemandProvider  ──→ 11 个权限（需求+查看）
-  │   stockop   ──→   StockOperator   ──→ 19 个权限（库存操作+查看）
+  │   admin     ──→   Admin           ──→ 12 个权限（全局查看 + 用户CRUD + 角色管理）
+  │   stockop   ──→   StockOperator   ──→ 17 个权限（业务全权 + 出版社管理 + 查看）
+  │   demander  ──→   DemandProvider  ──→ 14 个权限（需求CRUD + 出版社管理 + 查看）
   │   viewer    ──→   Viewer          ──→  7 个权限（仅查看）
 ```
+
+> ⚠️ **v2.0 变更**：Admin 不再拥有业务操作权限（教材/需求/订购/出入库的增删改），专注系统管理与用户管理。
 
 ### 存储过程
 

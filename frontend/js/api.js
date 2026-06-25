@@ -66,8 +66,6 @@ function getUserPermissions() {
 
 function hasPermission(permissionCode) {
     var permissions = getUserPermissions();
-    var userInfo = getStoredUserInfo();
-    if (userInfo && userInfo.role === 'Admin') return true;
     return permissions.includes(permissionCode);
 }
 
@@ -108,6 +106,11 @@ function applyPermissionVisibility() {
         if (code && !hasPermission(code)) {
             el.classList.add('no-permission');
             el.setAttribute('title', PERMISSION_DENIED_MSG[code] || '您没有此操作的权限');
+            // 禁用表单元素：按钮不可点击，输入框不可编辑
+            if (el.tagName === 'BUTTON' || el.tagName === 'INPUT' ||
+                el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+                el.disabled = true;
+            }
         }
     });
 }
@@ -263,6 +266,10 @@ async function addStockInApi(params) {
     });
 }
 
+async function getStockInHistoryApi() {
+    return request('/stock-in');
+}
+
 // ============================================================
 // 6. 出库管理
 // ============================================================
@@ -272,6 +279,10 @@ async function addStockOutApi(params) {
         method: 'POST',
         body: JSON.stringify(params)
     });
+}
+
+async function getStockOutHistoryApi() {
+    return request('/stock-out');
 }
 
 // ============================================================
@@ -410,4 +421,33 @@ async function getBookListByTypeApi(params) {
 
 async function getStatisticsApi() {
     return request('/statistics');
+}
+
+// ============================================================
+// 10. 订购记录（仅 Admin）
+// ============================================================
+
+async function getOrderHistoryApi() {
+    return request('/orders');
+}
+
+// ============================================================
+// 11. 用户管理（仅 Admin）
+// ============================================================
+
+async function getUserListApi() {
+    return request('/users');
+}
+
+async function addUserApi(params) {
+    return request('/users', {
+        method: 'POST',
+        body: JSON.stringify(params)
+    });
+}
+
+async function deleteUserApi(userId) {
+    return request('/users/' + userId, {
+        method: 'DELETE'
+    });
 }

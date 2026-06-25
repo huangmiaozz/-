@@ -6,7 +6,7 @@
  */
 
 /** 所有 section ID 列表（与导航栏 data-page 对应） */
-const SECTION_IDS = ['navigation', 'demands', 'books', 'publishers', 'stock-in', 'stock-out', 'orders'];
+const SECTION_IDS = ['navigation', 'demands', 'books', 'publishers', 'stock-in', 'stock-out', 'orders', 'users'];
 
 /**
  * 滚动到指定区域
@@ -47,6 +47,9 @@ function renderAllSections() {
         </section>
         <section id="section-orders" class="page-section" data-nav="orders" data-permission-hide="role:manage">
             ${renderOrdersPage()}
+        </section>
+        <section id="section-users" class="page-section" data-nav="users" data-permission-hide="user:view">
+            ${renderUsersPage()}
         </section>
     `;
 }
@@ -724,7 +727,8 @@ const NAV_ITEMS = [
     { page: 'publishers', icon: '🏢', label: '出版社',     permission: 'publisher:view' },
     { page: 'stock-in',   icon: '📥', label: '入库',       permission: 'stockin:view' },
     { page: 'stock-out',  icon: '📤', label: '出库',       permission: 'stockout:view' },
-    { page: 'orders',     icon: '🛒', label: '订购记录',   permission: 'role:manage' }
+    { page: 'orders',     icon: '🛒', label: '订购记录',   permission: 'role:manage' },
+    { page: 'users',      icon: '👥', label: '用户管理',   permission: 'user:view' }
 ];
 
 /**
@@ -738,6 +742,79 @@ function renderDynamicNavLinks() {
             `<a href="#" data-page="${item.page}" class="liquid-nav-link">${item.icon} ${item.label}</a>`
         )
         .join('\n                        ');
+}
+
+/**
+ * 用户管理页面（仅 Admin 可见）：用户列表 + 添加用户 + 删除用户
+ */
+function renderUsersPage() {
+    return `
+        <div class="page reveal">
+            <div class="page-header">
+                <h2>👥 用户管理</h2>
+                <button id="addUserBtn" class="btn btn-primary" data-permission="user:create">+ 添加用户</button>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>显示名称</th>
+                            <th>角色</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody">
+                        <tr>
+                            <td colspan="7" class="empty-state"><p>加载中...</p></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 添加用户模态框 -->
+        <div id="addUserModal" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>添加用户</h3>
+                    <button id="userModalClose" class="modal-close">&times;</button>
+                </div>
+                <form id="addUserForm">
+                    <div class="form-group">
+                        <label for="newUsername">用户名</label>
+                        <input type="text" id="newUsername" name="username" class="form-control" placeholder="请输入用户名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">密码</label>
+                        <input type="password" id="newPassword" name="password" class="form-control" placeholder="请输入密码" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newDisplayName">显示名称</label>
+                        <input type="text" id="newDisplayName" name="displayName" class="form-control" placeholder="请输入显示名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newRole">角色</label>
+                        <select id="newRole" name="roleName" class="form-control" required>
+                            <option value="">请选择角色...</option>
+                            <option value="Admin">管理员</option>
+                            <option value="StockOperator">库存操作员</option>
+                            <option value="DemandProvider">需求提出者</option>
+                            <option value="Viewer">只读人员</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" id="userModalCancel" class="btn" style="background: rgba(0,0,0,0.05); color: #4a5568;">取消</button>
+                        <button type="submit" class="btn btn-primary">确认添加</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
 }
 
 /**
