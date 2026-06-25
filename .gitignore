@@ -1,0 +1,12 @@
+# Maven 构建输出
+target/
+backend/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 系统文件
+Thumbs.db
+.DS_Store
