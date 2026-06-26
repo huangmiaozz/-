@@ -2,7 +2,7 @@
 
 一个基于 **Spring Boot 3.2 + SQL Server** 的教材进销存管理系统，前端为纯 HTML/CSS/JS 单页应用（SPA），支持教材库存管理、需求追踪、入库出库、订单管理及多角色 RBAC 权限控制。
 
-> 🔐 **v2.0 更新**：密码 BCrypt 加密存储、Admin 权限精简为系统管理员（仅管人不管事）、用户管理模块上线。
+> 🔐 **v3.0 更新**：数据库 16 表 → 9 表（主从合并）、RBAC 简化为 RoleName 字段、权限硬编码、触发器批量 JOIN 替代游标。
 
 
 ---
@@ -21,7 +21,8 @@ TextBookManagement/
 │   │   └── router.js                 # 单页滚动路由 & 各模块 HTML 模板渲染
 │   └── images/                       # 背景与装饰图片
 │
-├── textBook.sql                      # 数据库初始化脚本
+├── textBook.sql                      # 数据库建库脚本（9 张表 + 触发器 + 存储过程）
+├── data.sql                          # 种子数据（出版社+教材+需求+订购+出入库示例）
 ├── 启动后端.bat                       # 一键启动后端
 ├── backend/                          # 后端（Spring Boot）
 │   ├── pom.xml                       # Maven 依赖配置
@@ -105,17 +106,11 @@ TextBookManagement/
 
 ### 2. 数据库初始化
 
-在 SQL Server Management Studio（SSMS）或 sqlcmd 中打开 `textBook.sql`，**按顺序依次执行**以下五个部分：
+**第一步**：在 SSMS 中执行 `textBook.sql`（自动删除旧表 → 建 9 张新表 → 插默认用户 → 创建触发器/存储过程）。
 
-| 步骤 | 内容 | 说明 |
-|------|------|------|
-| 第一部分 | 删除旧表 | 按外键依赖倒序 DROP，清理旧数据 |
-| 第二部分 | 创建新表 | 建表（Users → Roles → ... → TextBooks） |
-| 第三部分 | 插入基础数据 | 角色、权限、默认用户 |
-| 第四部分 | 创建触发器 | StockInUpdate / StockOutUpdate / DemandAutoFulfill |
-| 第五部分 | 创建存储过程 | TextBookStatistics |
+**第二步**（可选）：执行 `data.sql` 导入种子数据（5 个出版社、5 个类型、10 本教材、3 条需求 + 明细、2 条订购、2 条入库、1 条出库）。
 
-> 验证：执行 `SELECT * FROM Users` 应返回 4 条默认用户记录。
+> 验证：执行 `SELECT * FROM Users` 应返回 4 条用户记录。
 
 ### 3. 配置后端
 
@@ -239,43 +234,61 @@ graph LR
     F --> G[⚡ 触发器扣减库存]
 ```
 
-### 数据表关系
+### 数据表关系（v3.0：9 张表）
 
 ```
 Users ──┐
-        ├── UserRoles ──── Roles ──── RolePermissions ──── Permissions
         ├── BookDemands ── BookDemandDetails ── TextBooks ── Types
-        ├── BookOrder ──── BookOrderDetails ────┘           └── Publishers
-        ├── StockIn ────── StockInDetails ──────┘
-        └── StockOut ───── StockOutDetails ─────┘
+        ├── BookOrder (复合PK: OrderId+BookId) ──┘           └── Publishers
+        ├── StockIn   (复合PK: StockInId+BookId) ─┘
+        └── StockOut  (复合PK: StockOutId+BookId) ─┘
 ```
+
+> 与 v2.0 的变化：移除 RBAC 5 表（Roles/Permissions/RolePermissions/UserRoles），Users 表直接存储 `RoleName`；StockIn/StockOut/BookOrder 三对主从表合并为单表（复合主键），表数从 16 减为 9。
 
 ### 触发器说明
 
 | 触发器 | 触发时机 | 作用 |
 |--------|----------|------|
-| `StockInUpdate` | 入库明细插入后 (AFTER INSERT) | 自动累加 `TextBooks.Stock` 库存数量 |
-| `StockOutUpdate` | 出库明细插入后 (AFTER INSERT) | 自动扣减库存；库存不足时 `RAISERROR` 回滚事务 |
-| `DemandAutoFulfill` | 入库明细插入后 (AFTER INSERT) | 自动更新 `BookDemandDetails.FulFilledQuantity`，全部满足则改需求状态为 `fulfilled` |
+| `StockInUpdate` | 入库插入后 (AFTER INSERT) | 批量 JOIN 累加 `TextBooks.Stock`（无游标） |
+| `StockOutUpdate` | 出库插入后 (AFTER INSERT) | 批量扣减库存；不足时 `RAISERROR` 回滚（无游标） |
+| `DemandAutoFulfill` | 入库插入后 (AFTER INSERT) | 自动更新需求满足量，全部满足则改状态为 `fulfilled` |
 
-### RBAC 权限体系
+### RBAC 权限体系（v3.0 硬编码）
 
 ```
-Users ──→ UserRoles ──→ Roles ──→ RolePermissions ──→ Permissions
-  │                      │
-  │   admin     ──→   Admin           ──→ 12 个权限（全局查看 + 用户CRUD + 角色管理）
-  │   stockop   ──→   StockOperator   ──→ 17 个权限（业务全权 + 出版社管理 + 查看）
-  │   demander  ──→   DemandProvider  ──→ 14 个权限（需求CRUD + 出版社管理 + 查看）
-  │   viewer    ──→   Viewer          ──→  7 个权限（仅查看）
+Users.RoleName  →  AuthService.getPermissionsByRole() 硬编码映射
+  │
+  │   Admin           →  12 个权限（全局查看 + 用户CRUD + 角色管理）
+  │   StockOperator   →  17 个权限（业务全权 + 出版社管理）
+  │   DemandProvider  →  14 个权限（需求CRUD + 出版社管理）
+  │   Viewer          →   7 个权限（纯只读）
 ```
 
-> ⚠️ **v2.0 变更**：Admin 不再拥有业务操作权限（教材/需求/订购/出入库的增删改），专注系统管理与用户管理。
+> ⚠️ **v3.0 变更**：权限不再存储在数据库中，改为 `AuthService` 中按角色硬编码。修改权限需改 Java 代码而非 SQL。
 
 ### 存储过程
 
 | 存储过程 | 说明 |
 |----------|------|
 | `TextBookStatistics` | 统计每本教材的订购总量、入库总量、出库总量 |
+
+---
+
+## 📋 版本变更
+
+### v3.0（2026-06）
+- 数据库 16 表 → 9 表（移除 Roles/Permissions/RolePermissions/UserRoles，合并 StockIn/StockOut/BookOrder 主从表）
+- Users 表加 `RoleName` 字段，权限在 `AuthService` 中硬编码
+- 触发器批量 JOIN 替代游标遍历
+- 订购/入库/出库 Service 简化为单表操作
+- 新增 `data.sql` 种子数据
+
+### v2.0（2026-06）
+- Admin 权限从 29 项缩减为 12 项
+- BCrypt 密码加密（兼容明文过渡）
+- 新增用户管理模块（CRUD）
+- 出入库/订购历史查询
 
 ---
 
@@ -295,7 +308,7 @@ taskkill /PID <进程ID> /F
 
 - 确认数据库已完整执行 `textBook.sql` 的全部五个部分
 - 检查 `application.yml` 中数据库连接 URL、用户名、密码是否正确
-- 默认密码：`admin` 为 `admin123`，其他用户均为 `123456`（当前为明文比对）
+- 默认密码：`admin` 为 `admin123`，其他用户均为 `123456`（BCrypt 兼容明文）
 
 ### 3. VS Code 显示 Java 包名错误
 
