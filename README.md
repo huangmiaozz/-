@@ -1,8 +1,6 @@
 # 📚 教材管理系统 (TextBook Management System)
 
-一个基于 **Spring Boot 3.2 + SQL Server** 的教材进销存管理系统，前端为纯 HTML/CSS/JS 单页应用（SPA），支持教材库存管理、需求追踪、入库出库、订单管理及多角色 RBAC 权限控制。
-
-> 🔐 **v3.0 更新**：数据库 16 表 → 9 表（主从合并）、RBAC 简化为 RoleName 字段、权限硬编码、触发器批量 JOIN 替代游标。
+一个基于 **Spring Boot 3.2 + SQL Server** 的教材进销存管理系统，前端为纯 HTML/CSS/JS 单页应用（SPA），支持教材库存管理、需求追踪、入库出库、订单管理及多角色权限控制。
 
 
 ---
@@ -234,7 +232,7 @@ graph LR
     F --> G[⚡ 触发器扣减库存]
 ```
 
-### 数据表关系（v3.0：9 张表）
+### 数据表关系（9 张表）
 
 ```
 Users ──┐
@@ -244,7 +242,6 @@ Users ──┐
         └── StockOut  (复合PK: StockOutId+BookId) ─┘
 ```
 
-> 与 v2.0 的变化：移除 RBAC 5 表（Roles/Permissions/RolePermissions/UserRoles），Users 表直接存储 `RoleName`；StockIn/StockOut/BookOrder 三对主从表合并为单表（复合主键），表数从 16 减为 9。
 
 ### 触发器说明
 
@@ -254,7 +251,7 @@ Users ──┐
 | `StockOutUpdate` | 出库插入后 (AFTER INSERT) | 批量扣减库存；不足时 `RAISERROR` 回滚（无游标） |
 | `DemandAutoFulfill` | 入库插入后 (AFTER INSERT) | 自动更新需求满足量，全部满足则改状态为 `fulfilled` |
 
-### RBAC 权限体系（v3.0 硬编码）
+### RBAC 权限体系
 
 ```
 Users.RoleName  →  AuthService.getPermissionsByRole() 硬编码映射
@@ -265,30 +262,13 @@ Users.RoleName  →  AuthService.getPermissionsByRole() 硬编码映射
   │   Viewer          →   7 个权限（纯只读）
 ```
 
-> ⚠️ **v3.0 变更**：权限不再存储在数据库中，改为 `AuthService` 中按角色硬编码。修改权限需改 Java 代码而非 SQL。
+> 权限在 `AuthService` 中按角色硬编码，修改权限需改 Java 代码而非 SQL 数据。
 
 ### 存储过程
 
 | 存储过程 | 说明 |
 |----------|------|
 | `TextBookStatistics` | 统计每本教材的订购总量、入库总量、出库总量 |
-
----
-
-## 📋 版本变更
-
-### v3.0（2026-06）
-- 数据库 16 表 → 9 表（移除 Roles/Permissions/RolePermissions/UserRoles，合并 StockIn/StockOut/BookOrder 主从表）
-- Users 表加 `RoleName` 字段，权限在 `AuthService` 中硬编码
-- 触发器批量 JOIN 替代游标遍历
-- 订购/入库/出库 Service 简化为单表操作
-- 新增 `data.sql` 种子数据
-
-### v2.0（2026-06）
-- Admin 权限从 29 项缩减为 12 项
-- BCrypt 密码加密（兼容明文过渡）
-- 新增用户管理模块（CRUD）
-- 出入库/订购历史查询
 
 ---
 
