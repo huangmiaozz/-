@@ -8,12 +8,13 @@ package com.textbook.model.entity;
  */
 public class User {
 
-    private Integer userId;         // 用户ID（自增主键）
-    private String username;        // 用户名（唯一）
-    private String password;        // 密码（当前明文存储，后续应加密）
-    private String displayName;     // 显示名称
-    private Boolean isActive;       // 是否启用
-    private String createdAt;       // 创建时间
+    private Integer userId;
+    private String username;
+    private String password;
+    private String displayName;
+    private String roleName;
+    private Boolean isActive;
+    private String createdAt;
 
     // ===== 构造器 =====
 
@@ -42,6 +43,9 @@ public class User {
 
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
+
+    public String getRoleName() { return roleName; }
+    public void setRoleName(String roleName) { this.roleName = roleName; }
 
     public Boolean getIsActive() { return isActive; }
     public void setIsActive(Boolean isActive) { this.isActive = isActive; }

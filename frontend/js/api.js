@@ -339,35 +339,30 @@ async function orderBookApi(params) {
 }
 
 /**
- * 获取待入库/订购列表（扁平化处理）
+ * 获取待入库/订购列表（v3.0：已是单表扁平数据，无需再展开）
  */
 async function getPendingStockApi() {
     var result = await request('/orders');
     if (result.code !== 200 || !result.data) return result;
 
-    // 将嵌套的订单明细扁平化为前端期望的格式
     var flatList = [];
-    result.data.forEach(function (order) {
-        if (order.details && order.details.length > 0) {
-            order.details.forEach(function (detail) {
-                flatList.push({
-                    pendingId: order.OrderId,           // 用 OrderId 作为 pendingId
-                    orderId: order.OrderId,
-                    bookId: detail.BookId,
-                    bookname: detail.Bookname || '',
-                    isbn: detail.ISBN || '',
-                    author: detail.Author || '',
-                    price: detail.Price || 0,
-                    quantity: detail.Quantity || 0,
-                    publisherId: null,
-                    publisherName: detail.PublisherName || '',
-                    typeId: null,
-                    typeName: detail.TypeName || '',
-                    merchantName: order.MerchantName || '',
-                    orderDate: order.OrderDate || ''
-                });
-            });
-        }
+    result.data.forEach(function (row) {
+        flatList.push({
+            pendingId: row.OrderId,
+            orderId: row.OrderId,
+            bookId: row.BookId,
+            bookname: row.Bookname || '',
+            isbn: row.ISBN || '',
+            author: row.Author || '',
+            price: row.Price || 0,
+            quantity: row.Quantity || 0,
+            publisherId: null,
+            publisherName: row.PublisherName || '',
+            typeId: null,
+            typeName: row.TypeName || '',
+            merchantName: row.MerchantName || '',
+            orderDate: row.OrderDate || ''
+        });
     });
     return { code: 200, data: flatList };
 }

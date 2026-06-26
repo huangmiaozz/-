@@ -2,99 +2,68 @@ package com.textbook.service;
 
 import com.textbook.model.dto.StockInDTO;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.PreparedStatement;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
- * 入库管理 Service — 对应前端 addStockInApi()
- *
- * 关键：INSERT StockInDetails 后，数据库触发器 StockInUpdate 自动增加 TextBooks.Stock
- *       同时 DemandAutoFulfill 触发器自动检测需求是否满足
- *       后端只需插入主表+明细表，不需要手动更新库存！
+ * 入库管理 Service（v3.0 合并表：StockIn 一张表替代主从双表）
+ * 触发器 StockInUpdate 自动更新 TextBooks.Stock
  */
 @Service
 public class StockInService {
 
     private final JdbcTemplate jdbc;
 
-    public StockInService(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-    }
+    public StockInService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
-    /**
-     * 新增入库（含明细）
-     *
-     * @Transactional 确保主表和明细表在同一事务中
-     */
     @Transactional
     public void add(StockInDTO dto) {
-        // 第1步：插入入库主表
-        String masterSql = "INSERT INTO StockIn (StockInDate, Operator) VALUES (?, ?)";
+        // 生成新 StockInId
+        Integer maxId = jdbc.queryForObject(
+                "SELECT ISNULL(MAX(StockInId), 0) FROM StockIn", Integer.class);
+        int stockInId = (maxId == null ? 0 : maxId) + 1;
 
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbc.update(connection -> {
-            PreparedStatement ps = connection.prepareStatement(masterSql,
-                    Statement.RETURN_GENERATED_KEYS);
-            ps.setString(1, dto.getStockInDate());
-            ps.setInt(2, dto.getOperatorId());
-            return ps;
-        }, keyHolder);
-
-        // 获取自增主键 StockInId
-        int stockInId = keyHolder.getKey().intValue();
-
-        // 第2步：批量插入入库明细 → 触发器自动更新库存！
-        String detailSql = "INSERT INTO StockInDetails (StockInId, BookId, Quantity) VALUES (?, ?, ?)";
+        // 逐本教材插入一行 → 触发器自动累加库存
+        String sql = "INSERT INTO StockIn (StockInId, BookId, Quantity, StockInDate, Operator) VALUES (?, ?, ?, ?, ?)";
         for (StockInDTO.StockInDetailItem item : dto.getDetails()) {
-            jdbc.update(detailSql, stockInId, item.getBookId(), item.getQuantity());
+            jdbc.update(sql, stockInId, item.getBookId(), item.getQuantity(),
+                    dto.getStockInDate(), dto.getOperatorId());
         }
     }
 
-    /**
-     * 查询入库历史记录（含明细）
-     *
-     * @return [{ stockInId, stockInDate, operatorName, details: [{ bookname, quantity }] }]
-     */
     public List<Map<String, Object>> listHistory() {
-        // 查询所有入库主记录
-        String masterSql = """
-            SELECT si.StockInId, si.StockInDate, u.DisplayName AS OperatorName
+        String sql = """
+            SELECT si.StockInId, si.StockInDate, u.DisplayName AS OperatorName,
+                   si.BookId, tb.Bookname, si.Quantity
             FROM StockIn si
             JOIN Users u ON si.Operator = u.UserId
+            JOIN TextBooks tb ON si.BookId = tb.BookId
             ORDER BY si.StockInId DESC
             """;
 
-        List<Map<String, Object>> result = jdbc.query(masterSql, (rs, rowNum) -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("stockInId", rs.getInt("StockInId"));
-            map.put("stockInDate", rs.getString("StockInDate"));
-            map.put("operatorName", rs.getString("OperatorName"));
-            map.put("details", new ArrayList<>());
-            return map;
-        });
+        List<Map<String, Object>> flat = jdbc.queryForList(sql);
 
-        // 查询每条主记录的明细
-        for (Map<String, Object> record : result) {
-            int stockInId = (int) record.get("stockInId");
-            String detailSql = """
-                SELECT tb.Bookname, sid.Quantity
-                FROM StockInDetails sid
-                JOIN TextBooks tb ON sid.BookId = tb.BookId
-                WHERE sid.StockInId = ?
-                """;
-            List<Map<String, Object>> details = jdbc.queryForList(detailSql, stockInId);
-            record.put("details", details);
+        // 按 StockInId 分组
+        Map<Integer, Map<String, Object>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : flat) {
+            int id = (int) row.get("StockInId");
+            grouped.computeIfAbsent(id, k -> {
+                Map<String, Object> m = new HashMap<>();
+                m.put("stockInId", id);
+                m.put("stockInDate", row.get("StockInDate"));
+                m.put("operatorName", row.get("OperatorName"));
+                m.put("details", new ArrayList<>());
+                return m;
+            });
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("bookname", row.get("Bookname"));
+            detail.put("quantity", row.get("Quantity"));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> details = (List<Map<String, Object>>) grouped.get(id).get("details");
+            details.add(detail);
         }
-
-        return result;
+        return new ArrayList<>(grouped.values());
     }
 }

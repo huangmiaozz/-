@@ -1946,17 +1946,34 @@ async function initOrdersPage() {
             return;
         }
 
-        container.innerHTML = result.data.map(o => `
+        // v3.0：扁平数据按 OrderId 分组
+        const grouped = {};
+        result.data.forEach(row => {
+            const id = row.OrderId;
+            if (!grouped[id]) {
+                grouped[id] = {
+                    orderId: id,
+                    orderDate: row.OrderDate,
+                    operatorName: row.OperatorName,
+                    merchantName: row.MerchantName,
+                    items: []
+                };
+            }
+            grouped[id].items.push({ bookname: row.Bookname, quantity: row.Quantity });
+        });
+
+        container.innerHTML = Object.values(grouped).map(o => `
             <div class="history-card reveal">
                 <div class="history-card-header">
-                    <span class="history-id">#${o.OrderId}</span>
-                    <span>📅 ${o.OrderDate}</span>
-                    <span>👤 ${o.OperatorName}</span>
+                    <span class="history-id">#${o.orderId}</span>
+                    <span>📅 ${o.orderDate}</span>
+                    <span>👤 ${o.operatorName}</span>
+                    <span>🏪 ${o.merchantName || '-'}</span>
                 </div>
                 <table class="demand-detail-table">
                     <thead><tr><th>教材名称</th><th>订购数量</th></tr></thead>
                     <tbody>
-                        ${(o.details || []).map(d => `<tr><td>${d.Bookname}</td><td>${d.Quantity}</td></tr>`).join('')}
+                        ${o.items.map(d => `<tr><td>${d.bookname}</td><td>${d.quantity}</td></tr>`).join('')}
                     </tbody>
                 </table>
             </div>

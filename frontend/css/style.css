@@ -1792,7 +1792,7 @@ input[type="number"] {
 
 /* ============================================================
    导航栏
-   sticky 定位，初始全宽透明，滚动后收缩为居中胶囊 + 玻璃拟态
+   sticky 定位，初始全宽透明，滚动后收缩为居中胶囊
    ============================================================ */
 
 /* 外层容器：始终透明，仅负责 sticky 定位 */
@@ -1814,7 +1814,7 @@ input[type="number"] {
     transition: none;
 }
 
-/* 滚动后外层仍透明（毛玻璃效果全由内层胶囊呈现） */
+/* 滚动后外层仍透明 */
 .liquid-navbar.scrolled {
     background: transparent;
     backdrop-filter: none;
@@ -1844,7 +1844,7 @@ input[type="number"] {
                 max-width 0.4s ease, border-radius 0.4s ease, padding 0.4s ease;
 }
 
-/* 滚动后内层收缩：最大宽度 1120px + 圆角胶囊 + 玻璃拟态 */
+/* 滚动后内层收缩：最大宽度 1120px + 圆角胶囊 */
 .liquid-navbar-inner.scrolled {
     max-width: 1120px;
     padding: 6px 20px;
@@ -1936,7 +1936,7 @@ input[type="number"] {
     white-space: nowrap;
 }
 
-/* 退登按钮：玻璃拟态白底 + 内高光，hover 变红 + 箭头右移 */
+/* 退登按钮：内高光，hover 变红 + 箭头右移 */
 .liquid-btn-logout {
     display: inline-flex;
     align-items: center;

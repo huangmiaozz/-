@@ -16,10 +16,9 @@ import java.util.List;
  *
  * 流程:
  * 1. 查 Users 表验证用户名密码（BCrypt 加密比对）
- * 2. 查 UserRoles + Roles 表获取角色
- * 3. 查 RolePermissions + Permissions 表获取权限列表
- * 4. 用 JwtUtil 生成 Token
- * 5. 返回 {token, userInfo, permissions}
+ * 2. 读取 RoleName 字段，按角色映射硬编码权限列表
+ * 3. 用 JwtUtil 生成 Token
+ * 4. 返回 {token, userInfo, permissions}
  */
 @Service
 public class AuthService {
@@ -35,14 +34,51 @@ public class AuthService {
     }
 
     /**
+     * 根据角色名获取硬编码权限列表
+     */
+    private List<String> getPermissionsByRole(String roleName) {
+        return switch (roleName) {
+            case "Admin" -> List.of(
+                "book:view", "demand:view", "order:view", "stockin:view", "stockout:view",
+                "publisher:view", "statistics:view",
+                "user:view", "user:create", "user:edit", "user:delete",
+                "role:manage"
+            );
+            case "StockOperator" -> List.of(
+                "book:view", "book:create", "book:edit", "book:delete",
+                "demand:view",
+                "order:view", "order:create", "order:edit", "order:delete",
+                "stockin:view", "stockin:create", "stockin:edit", "stockin:delete",
+                "stockout:view", "stockout:create", "stockout:edit", "stockout:delete",
+                "publisher:view", "publisher:create", "publisher:edit", "publisher:delete",
+                "statistics:view"
+            );
+            case "DemandProvider" -> List.of(
+                "book:view",
+                "demand:view", "demand:create", "demand:edit", "demand:delete",
+                "order:view",
+                "stockin:view", "stockout:view",
+                "publisher:view", "publisher:create", "publisher:edit", "publisher:delete",
+                "statistics:view"
+            );
+            case "Viewer" -> List.of(
+                "book:view", "demand:view", "order:view",
+                "stockin:view", "stockout:view",
+                "publisher:view", "statistics:view"
+            );
+            default -> List.of();
+        };
+    }
+
+    /**
      * 用户登录
      *
      * @param dto { username, password }
      * @return LoginVO { token, userInfo, permissions }
      */
     public LoginVO login(LoginDTO dto) {
-        // ===== 第1步：查用户 =====
-        String sql = "SELECT UserId, Username, Password, DisplayName, IsActive " +
+        // ===== 第1步：查用户（含 RoleName） =====
+        String sql = "SELECT UserId, Username, Password, DisplayName, RoleName, IsActive " +
                      "FROM Users WHERE Username = ?";
         List<User> users = jdbc.query(sql, (rs, rowNum) -> {
             User u = new User();
@@ -50,6 +86,7 @@ public class AuthService {
             u.setUsername(rs.getString("Username"));
             u.setPassword(rs.getString("Password"));
             u.setDisplayName(rs.getString("DisplayName"));
+            u.setRoleName(rs.getString("RoleName"));
             u.setIsActive(rs.getBoolean("IsActive"));
             return u;
         }, dto.getUsername());
@@ -60,31 +97,23 @@ public class AuthService {
 
         User user = users.get(0);
 
-        // 验证是否启用
         if (user.getIsActive() != null && !user.getIsActive()) {
             throw new IllegalArgumentException("该账号已被禁用");
         }
 
-        // 验证密码：BCrypt 优先，兼容旧明文密码（过渡期）
+        // 验证密码：BCrypt 优先，兼容明文
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())
                 && !user.getPassword().equals(dto.getPassword())) {
             throw new IllegalArgumentException("用户名或密码错误");
         }
 
-        // ===== 第2步：查角色 =====
-        String roleSql = "SELECT r.RoleId, r.RoleName " +
-                        "FROM Roles r " +
-                        "JOIN UserRoles ur ON r.RoleId = ur.RoleId " +
-                        "WHERE ur.UserId = ?";
-        List<String> roleNames = jdbc.query(roleSql, (rs, rowNum) ->
-            rs.getString("RoleName"), user.getUserId());
-
-        if (roleNames.isEmpty()) {
+        // ===== 第2步：读取 RoleName，硬编码获取权限 =====
+        String roleName = user.getRoleName();
+        if (roleName == null || roleName.isEmpty()) {
             throw new IllegalArgumentException("该用户未分配角色，请联系管理员");
         }
 
-        // 取第一个角色（当前设计是一个用户一个角色）
-        String roleName = roleNames.get(0);
+        List<String> permissions = getPermissionsByRole(roleName);
 
         // 角色中文名映射
         String roleDisplayName = switch (roleName) {
@@ -95,18 +124,10 @@ public class AuthService {
             default                -> roleName;
         };
 
-        // ===== 第3步：查权限列表 =====
-        String permSql = "SELECT p.PermissionCode " +
-                        "FROM Permissions p " +
-                        "JOIN RolePermissions rp ON p.PermissionId = rp.PermissionId " +
-                        "JOIN UserRoles ur ON rp.RoleId = ur.RoleId " +
-                        "WHERE ur.UserId = ?";
-        List<String> permissions = jdbc.queryForList(permSql, String.class, user.getUserId());
-
-        // ===== 第4步：生成 JWT =====
+        // ===== 第3步：生成 JWT =====
         String token = jwtUtil.generateToken(user.getUserId(), roleName, permissions);
 
-        // ===== 第5步：组装返回数据 =====
+        // ===== 第4步：组装返回数据 =====
         UserInfoVO userInfo = new UserInfoVO(
                 user.getUserId(),
                 user.getUsername(),

@@ -22,6 +22,7 @@ com\textbook\util\JwtUtil.class
 com\textbook\controller\BookController.class
 com\textbook\config\SecurityConfig.class
 com\textbook\service\StatisticsService.class
+com\textbook\controller\UserController.class
 com\textbook\model\dto\StockOutDTO$StockOutDetailItem.class
 com\textbook\config\JwtAuthenticationFilter.class
 com\textbook\service\PublisherService.class
@@ -31,6 +32,8 @@ com\textbook\model\entity\StockIn.class
 com\textbook\service\StockOutService.class
 com\textbook\model\dto\DemandDTO$DemandDetailItem.class
 com\textbook\model\dto\LoginVO.class
+com\textbook\model\dto\RegisterDTO.class
+com\textbook\service\UserService.class
 com\textbook\service\OrderService.class
 com\textbook\config\CorsConfig.class
 com\textbook\model\entity\TextBook.class

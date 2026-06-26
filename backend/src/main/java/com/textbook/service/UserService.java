@@ -31,17 +31,12 @@ public class UserService {
 
     /**
      * 获取所有用户列表（含角色信息）
-     *
-     * @return [{ userId, username, displayName, roleName, roleDisplayName, isActive, createdAt }]
      */
     public List<Map<String, Object>> listUsers() {
         String sql = """
-            SELECT u.UserId, u.Username, u.DisplayName, u.IsActive, u.CreatedAt,
-                   r.RoleName, r.RoleId
-            FROM Users u
-            LEFT JOIN UserRoles ur ON u.UserId = ur.UserId
-            LEFT JOIN Roles r ON ur.RoleId = r.RoleId
-            ORDER BY u.UserId
+            SELECT UserId, Username, DisplayName, RoleName, IsActive, CreatedAt
+            FROM Users
+            ORDER BY UserId
             """;
 
         return jdbc.query(sql, (rs, rowNum) -> {
@@ -51,18 +46,16 @@ public class UserService {
             map.put("displayName", rs.getString("DisplayName"));
             map.put("isActive", rs.getBoolean("IsActive"));
             map.put("createdAt", rs.getString("CreatedAt"));
-            map.put("roleName", rs.getString("RoleName"));
 
-            // 角色中文名映射
             String role = rs.getString("RoleName");
-            String roleDisplayName = role != null ? switch (role) {
+            map.put("roleName", role);
+            map.put("roleDisplayName", role != null ? switch (role) {
                 case "Admin"           -> "管理员";
                 case "DemandProvider"  -> "需求提出者";
                 case "StockOperator"   -> "库存操作员";
                 case "Viewer"          -> "只读人员";
                 default                -> role;
-            } : "未分配";
-            map.put("roleDisplayName", roleDisplayName);
+            } : "未分配");
 
             return map;
         });
@@ -76,7 +69,7 @@ public class UserService {
      */
     @Transactional
     public int createUser(RegisterDTO dto) {
-        // 1. 检查用户名是否已存在
+        // 1. 检查用户名
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM Users WHERE Username = ?",
                 Integer.class, dto.getUsername());
@@ -87,44 +80,19 @@ public class UserService {
         // 2. 加密密码
         String encodedPassword = passwordEncoder.encode(dto.getPassword());
 
-        // 3. 插入用户
+        // 3. 插入用户（直接写 RoleName）
         String insertUserSql = """
-            INSERT INTO Users (Username, Password, DisplayName)
+            INSERT INTO Users (Username, Password, DisplayName, RoleName)
             OUTPUT INSERTED.UserId
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?, ?)
             """;
-        Integer userId = jdbc.queryForObject(insertUserSql, Integer.class,
-                dto.getUsername(), encodedPassword, dto.getDisplayName());
-
-        // 4. 查找角色 ID
-        List<Integer> roleIds = jdbc.queryForList(
-                "SELECT RoleId FROM Roles WHERE RoleName = ?",
-                Integer.class, dto.getRoleName());
-
-        if (roleIds.isEmpty()) {
-            throw new IllegalArgumentException("角色 '" + dto.getRoleName() + "' 不存在");
-        }
-
-        // 5. 分配角色
-        jdbc.update("INSERT INTO UserRoles (UserId, RoleId) VALUES (?, ?)",
-                userId, roleIds.get(0));
-
-        return userId;
+        return jdbc.queryForObject(insertUserSql, Integer.class,
+                dto.getUsername(), encodedPassword, dto.getDisplayName(), dto.getRoleName());
     }
 
-    /**
-     * 删除用户（级联删除角色关联）
-     *
-     * @param userId 用户 ID
-     */
     @Transactional
     public void deleteUser(int userId) {
-        // 1. 删除角色关联
-        jdbc.update("DELETE FROM UserRoles WHERE UserId = ?", userId);
-
-        // 2. 删除用户
         int rows = jdbc.update("DELETE FROM Users WHERE UserId = ?", userId);
-
         if (rows == 0) {
             throw new IllegalArgumentException("用户 ID " + userId + " 不存在");
         }
