@@ -73,7 +73,7 @@ CREATE TABLE TextBooks (
 );
 GO
 
--- Users 用户表（RoleName 替代 RBAC 五表）
+-- Users 用户表
 CREATE TABLE Users (
     UserId INT PRIMARY KEY IDENTITY(1,1),
     Username NVARCHAR(50) NOT NULL UNIQUE,

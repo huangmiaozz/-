@@ -2,9 +2,7 @@ com\textbook\controller\TypeController.class
 com\textbook\service\AuthService.class
 com\textbook\service\StockInService.class
 com\textbook\model\dto\BookDTO.class
-com\textbook\model\entity\StockInDetail.class
 com\textbook\model\dto\UserInfoVO.class
-com\textbook\model\entity\StockOutDetail.class
 com\textbook\model\dto\DemandDTO.class
 com\textbook\model\entity\BookOrder.class
 com\textbook\model\entity\User.class
@@ -50,5 +48,4 @@ com\textbook\model\dto\StockOutDTO.class
 com\textbook\common\PageResult.class
 com\textbook\model\entity\BookDemand.class
 com\textbook\model\entity\BookDemandDetail.class
-com\textbook\model\entity\BookOrderDetail.class
 com\textbook\controller\StockOutController.class

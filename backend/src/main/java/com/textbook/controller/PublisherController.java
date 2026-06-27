@@ -46,6 +46,16 @@ public class PublisherController {
     }
 
     /**
+     * 更新出版社
+     */
+    @PutMapping("/{publisherId}")
+    @PreAuthorize("hasAuthority('publisher:edit')")
+    public Result<Void> update(@PathVariable Integer publisherId, @RequestBody @Valid PublisherDTO dto) {
+        publisherService.update(publisherId, dto);
+        return Result.success("更新成功");
+    }
+
+    /**
      * 删除出版社
      */
     @DeleteMapping("/{publisherId}")

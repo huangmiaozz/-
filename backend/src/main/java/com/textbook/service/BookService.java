@@ -33,7 +33,9 @@ public class BookService {
     public PageResult<TextBook> list(int pageNum, int pageSize, String keyword, Integer typeId) {
         // ---- 构建动态 SQL ----
         StringBuilder countSql = new StringBuilder(
-            "SELECT COUNT(*) FROM TextBooks b WHERE 1=1");
+            "SELECT COUNT(*) FROM TextBooks b " +
+            "LEFT JOIN Types t ON b.TypeId = t.TypeId " +
+            "WHERE 1=1");
         StringBuilder dataSql = new StringBuilder(
             "SELECT b.*, p.PublisherName, t.TypeName " +
             "FROM TextBooks b " +
@@ -45,10 +47,10 @@ public class BookService {
         Object[] params;
         if (keyword != null && !keyword.isBlank()) {
             String like = "%" + keyword + "%";
-            String where = " AND (b.Bookname LIKE ? OR b.ISBN LIKE ? OR b.Author LIKE ? OR t.TypeName LIKE ?)";
+            String where = " AND (b.Bookname LIKE ? OR b.ISBN LIKE ? OR b.Author LIKE ?)";
             countSql.append(where);
             dataSql.append(where);
-            params = new Object[]{like, like, like, like};
+            params = new Object[]{like, like, like};
         } else {
             params = new Object[]{};
         }
@@ -98,8 +100,8 @@ public class BookService {
      */
     @Transactional
     public void add(BookDTO dto) {
-        String sql = "INSERT INTO TextBooks (Bookname, ISBN, Author, Price, PublisherId, TypeId, PublishDate) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO TextBooks (Bookname, ISBN, Author, Price, Stock, PublisherId, TypeId, PublishDate) " +
+                     "VALUES (?, ?, ?, ?, 0, ?, ?, ?)";
         jdbc.update(sql,
                 dto.getBookname(),
                 dto.getIsbn(),

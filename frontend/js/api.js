@@ -241,6 +241,13 @@ async function addPublisherApi(params) {
     });
 }
 
+async function updatePublisherApi(publisherId, params) {
+    return request('/publishers/' + publisherId, {
+        method: 'PUT',
+        body: JSON.stringify(params)
+    });
+}
+
 async function deletePublisherApi(publisherId) {
     return request('/publishers/' + publisherId, {
         method: 'DELETE'

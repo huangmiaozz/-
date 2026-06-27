@@ -30,7 +30,43 @@ public class StockInService {
         for (StockInDTO.StockInDetailItem item : dto.getDetails()) {
             jdbc.update(sql, stockInId, item.getBookId(), item.getQuantity(),
                     dto.getStockInDate(), dto.getOperatorId());
+
+            // 入库后扣减对应订购记录的待入库数量
+            jdbc.update(
+                "UPDATE BookOrder SET Quantity = Quantity - ? WHERE BookId = ? AND Quantity >= ?",
+                item.getQuantity(), item.getBookId(), item.getQuantity()
+            );
+            // 删除已全部入库的订购记录（Quantity <= 0）
+            jdbc.update("DELETE FROM BookOrder WHERE BookId = ? AND Quantity <= 0", item.getBookId());
         }
+
+        // ---- 需求完成检测：更新 FulFilledQuantity 并自动标记已完成的需求 ----
+        // 更新需求明细的已满足数量（按教材累计所有入库量）
+        jdbc.update("""
+            UPDATE bdd
+            SET FulFilledQuantity = (
+                SELECT ISNULL(SUM(si.Quantity), 0)
+                FROM StockIn si
+                WHERE si.BookId = bdd.BookId
+            )
+            FROM BookDemandDetails bdd
+            INNER JOIN BookDemands bd ON bdd.DemandId = bd.DemandId
+            WHERE bd.Status IN ('active', 'ordered')
+            """);
+
+        // 将全部明细已满足的需求标记为 fulfilled
+        jdbc.update("""
+            UPDATE BookDemands
+            SET Status = 'fulfilled'
+            WHERE DemandId IN (
+                SELECT bd.DemandId
+                FROM BookDemands bd
+                INNER JOIN BookDemandDetails bdd ON bd.DemandId = bdd.DemandId
+                WHERE bd.Status IN ('active', 'ordered')
+                GROUP BY bd.DemandId
+                HAVING COUNT(CASE WHEN bdd.FulFilledQuantity >= bdd.Quantity THEN 1 END) = COUNT(*)
+            )
+            """);
     }
 
     public List<Map<String, Object>> listHistory() {

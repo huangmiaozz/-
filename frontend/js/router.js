@@ -395,6 +395,9 @@ function renderBooksPage() {
         <div class="page reveal">
             <div class="page-header">
                 <h2>📚 教材管理</h2>
+                <div class="page-header-actions">
+                    <button id="openOrderBookBtn" class="btn btn-primary" data-permission="book:create">+ 订购教材</button>
+                </div>
             </div>
 
             <!-- 搜索栏 -->
@@ -501,8 +504,12 @@ function renderBooksPage() {
                         <label for="publishDate">出版日期</label>
                         <input type="date" id="publishDate" name="publishDate" class="form-control" value="2024-01-01">
                     </div>
-                    <!-- 隐藏字段：出版社ID，由订购按钮动态赋值 -->
-                    <input type="hidden" id="orderPublisherId" name="publisherId" value="">
+                    <div class="form-group">
+                        <label for="orderPublisherId">出版社</label>
+                        <select id="orderPublisherId" name="publisherId" class="form-control">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
                     <div class="modal-footer">
                         <button type="button" id="modalCancel" class="btn" style="background: rgba(0,0,0,0.05); color: #4a5568;">取消</button>
                         <button type="submit" class="btn btn-primary">确认订购</button>
@@ -823,5 +830,1319 @@ function renderUsersPage() {
 function closeAllModals() {
     document.querySelectorAll('.modal-overlay.show').forEach(modal => {
         modal.classList.remove('show');
+    });
+}
+
+// ============================================================
+// 初始化所有区域（由 app.js 的 enterApp() 调用）
+// ============================================================
+
+function initAllSections() {
+    initNavigationPage();
+    initDemandsPage();
+    initBooksPage();
+    initPublishersPage();
+    initStockInPage();
+    initStockOutPage();
+    initOrdersPage();
+    initUsersPage();
+}
+
+// ============================================================
+// 将模态框移到 body 末尾（避免父容器 overflow/z-index 问题）
+// ============================================================
+
+function moveModalsToBody() {
+    document.querySelectorAll('.modal-overlay').forEach(function (modal) {
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+    });
+}
+
+// ============================================================
+// 动态渲染导航链接
+// ============================================================
+
+function renderDynamicNavigation() {
+    var container = document.getElementById('dynamicNavLinks');
+    if (container) {
+        container.innerHTML = renderDynamicNavLinks();
+    }
+}
+
+// ============================================================
+// 通用模态框辅助函数
+// ============================================================
+
+function openModal(modalId) {
+    var modal = document.getElementById(modalId);
+    if (modal) modal.classList.add('show');
+}
+
+function closeModal(modalId) {
+    var modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('show');
+}
+
+// ============================================================
+// ██  需求管理页 初始化
+// ============================================================
+
+var currentDemandStatus = '';
+
+async function initDemandsPage() {
+    // 加载需求列表
+    await loadDemandList();
+
+    // 绑定过滤按钮
+    document.querySelectorAll('.demand-filter-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.demand-filter-btn').forEach(function (b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            currentDemandStatus = this.getAttribute('data-status') || '';
+            loadDemandList();
+        });
+    });
+
+    // 绑定创建需求按钮
+    var addBtn = document.getElementById('addDemandBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', async function () {
+            openModal('addDemandModal');
+            // 先加载教材下拉选项
+            await populateDemandBookSelects();
+        });
+    }
+
+    // 绑定模态框关闭
+    bindModalClose('addDemandModal', ['demandModalClose', 'demandModalCancel']);
+
+    // 绑定添加明细行按钮
+    var addRowBtn = document.getElementById('addDemandDetailRowBtn');
+    if (addRowBtn) {
+        addRowBtn.addEventListener('click', function () {
+            addDemandDetailRow();
+        });
+    }
+
+    // 绑定创建需求表单提交
+    var form = document.getElementById('addDemandForm');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            await submitDemandForm();
+        });
+    }
+}
+
+async function loadDemandList() {
+    var container = document.getElementById('demandListContainer');
+    if (!container) return;
+
+    try {
+        var result = await getDemandListApi({ status: currentDemandStatus || '' });
+        if (result.code !== 200 || !result.data) {
+            container.innerHTML = '<div class="empty-state"><p>暂无需求数据</p></div>';
+            return;
+        }
+
+        var demands = result.data;
+        if (demands.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>暂无需求数据</p></div>';
+            return;
+        }
+
+        var statusLabels = {
+            'active': '🟡 进行中',
+            'ordered': '🔵 已订购',
+            'fulfilled': '🟢 已完成',
+            'cancelled': '⚫ 已取消'
+        };
+
+        var html = '<div class="demand-card-list">';
+        demands.forEach(function (d) {
+            var detailsHtml = '';
+            if (d.details && d.details.length > 0) {
+                detailsHtml = '<ul class="demand-detail-mini">' +
+                    d.details.map(function (dd) {
+                        return '<li>' + (dd.bookname || '教材#' + dd.bookId) +
+                               ' × ' + dd.quantity +
+                               '（已满足: ' + (dd.fulFilledQuantity || dd.fulfilledQuantity || 0) + '）</li>';
+                    }).join('') + '</ul>';
+            }
+
+            html += '<div class="demand-card">' +
+                '<div class="demand-card-header">' +
+                '<span class="demand-card-title">' + (d.demandTitle || '') + '</span>' +
+                '<span class="demand-card-status">' + (statusLabels[d.status] || d.status) + '</span>' +
+                '</div>' +
+                '<div class="demand-card-meta">' +
+                '<span>提出者: ' + (d.requesterName || '用户#' + d.requesterId) + '</span>' +
+                '<span>日期: ' + (d.demandDate || '') + '</span>' +
+                '</div>' +
+                (d.notes ? '<div class="demand-card-notes">备注: ' + d.notes + '</div>' : '') +
+                detailsHtml +
+                '<div class="demand-card-actions">' +
+                (d.status === 'active' ? '<button class="btn btn-sm btn-cancel-demand" data-id="' + d.demandId + '" data-permission="demand:edit">取消需求</button>' : '') +
+                '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        // 绑定取消按钮
+        container.querySelectorAll('.btn-cancel-demand').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+                var demandId = parseInt(this.getAttribute('data-id'));
+                if (confirm('确定取消该需求吗？')) {
+                    var res = await cancelDemandApi(demandId);
+                    if (res.code === 200) {
+                        showMessage('需求已取消', 'success');
+                        loadDemandList();
+                    } else {
+                        showMessage(res.message || '取消失败', 'error');
+                    }
+                }
+            });
+        });
+
+        applyPermissionVisibility();
+    } catch (err) {
+        console.error('加载需求列表失败:', err);
+        container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+    }
+}
+
+async function populateDemandBookSelects() {
+    var selects = document.querySelectorAll('#demandDetailRows .demand-book-select');
+    if (selects.length === 0) return;
+
+    try {
+        var result = await getBookListApi({ pageNum: 1, pageSize: 1000 });
+        var books = (result.code === 200 && result.data && result.data.rows) ? result.data.rows : [];
+
+        var optionsHtml = '<option value="">请选择教材...</option>';
+        books.forEach(function (b) {
+            optionsHtml += '<option value="' + b.bookId + '">' + b.bookname + ' (库存:' + (b.stock || 0) + ')</option>';
+        });
+
+        selects.forEach(function (sel) {
+            var currentVal = sel.value;
+            sel.innerHTML = optionsHtml;
+            if (currentVal) sel.value = currentVal;
+        });
+    } catch (err) {
+        console.error('加载教材选项失败:', err);
+    }
+}
+
+function addDemandDetailRow() {
+    var container = document.getElementById('demandDetailRows');
+    if (!container) return;
+
+    var row = document.createElement('div');
+    row.className = 'demand-detail-row';
+    row.innerHTML = '<select class="form-control demand-book-select" style="flex: 2;" required>' +
+        '<option value="">请选择教材...</option></select>' +
+        '<input type="number" class="form-control demand-quantity-input" placeholder="数量" min="1" value="1" style="flex: 1;" required>' +
+        '<button type="button" class="btn btn-sm btn-remove-demand-row" style="background: rgba(239,68,68,0.1); color: #ef4444;">✕</button>';
+
+    container.appendChild(row);
+
+    // 绑定删除行按钮
+    row.querySelector('.btn-remove-demand-row').addEventListener('click', function () {
+        row.remove();
+    });
+
+    // 填充教材选项
+    populateDemandBookSelects();
+}
+
+async function submitDemandForm() {
+    var titleInput = document.getElementById('demandTitle');
+    var notesInput = document.getElementById('demandNotes');
+
+    if (!titleInput || !titleInput.value.trim()) {
+        showMessage('请输入需求标题', 'warning');
+        return;
+    }
+
+    // 收集明细行数据
+    var rows = document.querySelectorAll('#demandDetailRows .demand-detail-row');
+    var details = [];
+    var hasError = false;
+
+    rows.forEach(function (row) {
+        var select = row.querySelector('.demand-book-select');
+        var qtyInput = row.querySelector('.demand-quantity-input');
+        var bookId = select ? parseInt(select.value) : 0;
+        var quantity = qtyInput ? parseInt(qtyInput.value) : 0;
+
+        if (!bookId || isNaN(bookId)) {
+            hasError = true;
+            return;
+        }
+        if (!quantity || quantity < 1) {
+            hasError = true;
+            return;
+        }
+        details.push({ bookId: bookId, quantity: quantity });
+    });
+
+    if (hasError || details.length === 0) {
+        showMessage('请为每行选择教材并填写有效数量', 'warning');
+        return;
+    }
+
+    try {
+        var result = await addDemandApi({
+            demandTitle: titleInput.value.trim(),
+            notes: notesInput ? notesInput.value.trim() : '',
+            details: details
+        });
+
+        if (result.code === 200) {
+            showMessage('需求创建成功', 'success');
+            closeModal('addDemandModal');
+            // 重置表单
+            titleInput.value = '';
+            if (notesInput) notesInput.value = '';
+            document.getElementById('demandDetailRows').innerHTML =
+                '<div class="demand-detail-row">' +
+                '<select class="form-control demand-book-select" style="flex: 2;" required><option value="">请选择教材...</option></select>' +
+                '<input type="number" class="form-control demand-quantity-input" placeholder="数量" min="1" value="1" style="flex: 1;" required>' +
+                '<button type="button" class="btn btn-sm btn-remove-demand-row" style="background: rgba(239,68,68,0.1); color: #ef4444;">✕</button>' +
+                '</div>';
+            loadDemandList();
+        } else {
+            showMessage(result.message || '创建需求失败', 'error');
+        }
+    } catch (err) {
+        console.error('创建需求失败:', err);
+        showMessage('创建需求失败: ' + (err.message || '未知错误'), 'error');
+    }
+}
+
+// ============================================================
+// ██  教材管理页 初始化
+// ============================================================
+
+var currentBookTypeId = null;
+
+async function initBooksPage() {
+    // 加载类型卡片 + 统计
+    await loadTypeCardsAndStats();
+
+    // 绑定搜索
+    var searchInput = document.getElementById('bookSearchInput');
+    var searchBtn = document.getElementById('bookSearchBtn');
+    if (searchBtn) {
+        searchBtn.addEventListener('click', function () {
+            loadBooksIntoTable(currentBookTypeId, searchInput ? searchInput.value : '');
+        });
+    }
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                loadBooksIntoTable(currentBookTypeId, searchInput.value);
+            }
+        });
+    }
+
+    // 绑定收起按钮
+    var collapseBtn = document.getElementById('collapseBookListBtn');
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', function () {
+            document.getElementById('bookListSection').style.display = 'none';
+        });
+    }
+
+    // 绑定订购教材模态框
+    bindBookOrderModal();
+
+    // 绑定"订购教材"按钮
+    var orderBtn = document.getElementById('openOrderBookBtn');
+    if (orderBtn) {
+        orderBtn.addEventListener('click', function () {
+            openModal('addBookModal');
+            loadOrderFormOptions();
+        });
+    }
+}
+
+async function loadTypeCardsAndStats() {
+    var grid = document.getElementById('typeCardGrid');
+    var keyword = document.getElementById('bookSearchInput') ? document.getElementById('bookSearchInput').value : '';
+
+    try {
+        var [bookResult, publisherResult, typeResult] = await Promise.all([
+            getBookListApi({ pageNum: 1, pageSize: 1000, keyword: keyword }),
+            getPublisherListApi(),
+            getTypeListApi()
+        ]);
+
+        // 更新统计卡片
+        if (bookResult.code === 200 && bookResult.data) {
+            var books = bookResult.data.rows || [];
+            document.getElementById('statTotalBooks').textContent = bookResult.data.total || books.length;
+            var totalStock = books.reduce(function (s, b) { return s + (b.stock || 0); }, 0);
+            document.getElementById('statTotalStock').textContent = totalStock;
+        }
+        if (publisherResult.code === 200 && publisherResult.data) {
+            document.getElementById('statTotalPublishers').textContent = publisherResult.data.length;
+        }
+        if (typeResult.code === 200 && typeResult.data) {
+            document.getElementById('statTotalTypes').textContent = typeResult.data.length;
+        }
+
+        // 按类型分组统计
+        var types = typeResult.code === 200 && typeResult.data ? typeResult.data : [];
+        var books = bookResult.code === 200 && bookResult.data && bookResult.data.rows ? bookResult.data.rows : [];
+
+        var typeCountMap = {};
+        var typeNameMap = {};
+        types.forEach(function (t) {
+            typeCountMap[t.typeId] = 0;
+            typeNameMap[t.typeId] = t.typeName || '未知';
+        });
+        books.forEach(function (b) {
+            var tid = b.typeId || 0;
+            if (!typeCountMap[tid]) typeCountMap[tid] = 0;
+            typeCountMap[tid] = (typeCountMap[tid] || 0) + 1;
+            if (!typeNameMap[tid]) typeNameMap[tid] = b.typeName || '未知';
+        });
+
+        if (Object.keys(typeCountMap).length === 0) {
+            grid.innerHTML = '<div class="empty-state"><p>暂无教材类型数据</p></div>';
+            return;
+        }
+
+        var html = '';
+        Object.keys(typeCountMap).forEach(function (tid) {
+            var count = typeCountMap[tid] || 0;
+            var name = typeNameMap[tid] || '未知';
+            html += '<div class="type-card" data-type-id="' + tid + '" data-type-name="' + name + '">' +
+                '<div class="type-card-icon">📚</div>' +
+                '<div class="type-card-name">' + name + '</div>' +
+                '<div class="type-card-count">' + count + ' 本教材</div>' +
+                '</div>';
+        });
+        grid.innerHTML = html;
+
+        // 绑定类型卡片点击
+        grid.querySelectorAll('.type-card').forEach(function (card) {
+            card.addEventListener('click', function () {
+                var typeId = this.getAttribute('data-type-id');
+                var typeName = this.getAttribute('data-type-name');
+                currentBookTypeId = typeId ? parseInt(typeId) : null;
+                document.getElementById('expandedTypeTitle').textContent = '📖 ' + typeName + ' - 教材列表';
+                document.getElementById('bookListSection').style.display = 'block';
+                loadBooksIntoTable(currentBookTypeId, keyword);
+                // 滚动到列表
+                document.getElementById('bookListSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    } catch (err) {
+        console.error('加载类型卡片失败:', err);
+        if (grid) grid.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+    }
+}
+
+async function loadBooksIntoTable(typeId, keyword) {
+    var tbody = document.getElementById('bookTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>加载中...</p></td></tr>';
+
+    try {
+        var result = await getBookListApi({
+            pageNum: 1,
+            pageSize: 1000,
+            keyword: keyword || '',
+            typeId: typeId || null
+        });
+
+        if (result.code !== 200 || !result.data) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>暂无教材</p></td></tr>';
+            return;
+        }
+
+        var books = result.data.rows || [];
+        if (books.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>暂无教材</p></td></tr>';
+            return;
+        }
+
+        var html = '';
+        books.forEach(function (b) {
+            html += '<tr>' +
+                '<td>' + b.bookId + '</td>' +
+                '<td>' + (b.bookname || '') + '</td>' +
+                '<td>' + (b.isbn || '') + '</td>' +
+                '<td>' + (b.author || '') + '</td>' +
+                '<td>¥' + (b.price || 0).toFixed(2) + '</td>' +
+                '<td>' + (b.stock || 0) + '</td>' +
+                '<td>' + (b.publisherName || '') + '</td>' +
+                '<td>' +
+                '<button class="btn btn-sm btn-edit-book" data-id="' + b.bookId + '" data-permission="book:edit">编辑</button> ' +
+                '<button class="btn btn-sm btn-delete-book" data-id="' + b.bookId + '" style="background: rgba(239,68,68,0.1); color: #ef4444;" data-permission="book:delete">删除</button>' +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+
+        // 绑定编辑按钮
+        tbody.querySelectorAll('.btn-edit-book').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var bookId = parseInt(this.getAttribute('data-id'));
+                var book = books.find(function (b) { return b.bookId === bookId; });
+                if (book) openEditBookModal(book);
+            });
+        });
+
+        // 绑定删除按钮
+        tbody.querySelectorAll('.btn-delete-book').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+                var bookId = parseInt(this.getAttribute('data-id'));
+                if (confirm('确定删除该教材吗？此操作不可撤销。')) {
+                    var res = await deleteBookApi(bookId);
+                    if (res.code === 200) {
+                        showMessage('教材已删除', 'success');
+                        loadBooksIntoTable(currentBookTypeId, keyword);
+                        loadTypeCardsAndStats();
+                    } else {
+                        showMessage(res.message || '删除失败', 'error');
+                    }
+                }
+            });
+        });
+
+        applyPermissionVisibility();
+    } catch (err) {
+        console.error('加载教材列表失败:', err);
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>加载失败</p></td></tr>';
+    }
+}
+
+// ---- 订购教材模态框 ----
+
+function bindBookOrderModal() {
+    // 绑定关闭
+    bindModalClose('addBookModal', ['modalClose', 'modalCancel']);
+
+    // 绑定表单提交
+    var form = document.getElementById('addBookForm');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            await submitOrderForm();
+        });
+    }
+}
+
+async function loadOrderFormOptions() {
+    try {
+        var [typeResult, pubResult] = await Promise.all([
+            getTypeListApi(),
+            getPublisherListApi()
+        ]);
+
+        var typeSelect = document.getElementById('typeId');
+        if (typeSelect && typeResult.code === 200 && typeResult.data) {
+            var html = '<option value="">请选择类型...</option>';
+            typeResult.data.forEach(function (t) {
+                html += '<option value="' + t.typeId + '">' + (t.typeName || '') + '</option>';
+            });
+            typeSelect.innerHTML = html;
+        }
+
+        var pubSelect = document.getElementById('orderPublisherId');
+        if (pubSelect && pubResult.code === 200 && pubResult.data) {
+            var html = '<option value="">请选择出版社...</option>';
+            pubResult.data.forEach(function (p) {
+                html += '<option value="' + p.publisherId + '">' + (p.publisherName || '') + '</option>';
+            });
+            pubSelect.innerHTML = html;
+        }
+    } catch (err) {
+        console.error('加载订购选项失败:', err);
+    }
+}
+
+async function submitOrderForm() {
+    var bookname = document.getElementById('bookname').value.trim();
+    var isbn = document.getElementById('isbn').value.trim();
+    var author = document.getElementById('author').value.trim();
+    var price = parseFloat(document.getElementById('price').value);
+    var quantity = parseInt(document.getElementById('bookQuantity').value);
+    var typeId = parseInt(document.getElementById('typeId').value);
+    var publisherId = parseInt(document.getElementById('orderPublisherId').value);
+    var publishDate = document.getElementById('publishDate').value;
+
+    if (!bookname || !isbn || !author) {
+        showMessage('请填写教材名称、ISBN和作者', 'warning');
+        return;
+    }
+    if (!publisherId || isNaN(publisherId)) {
+        showMessage('请选择出版社', 'warning');
+        return;
+    }
+    if (!typeId || isNaN(typeId)) {
+        showMessage('请选择教材类型', 'warning');
+        return;
+    }
+    if (isNaN(price) || price <= 0) {
+        showMessage('请输入有效价格', 'warning');
+        return;
+    }
+    if (isNaN(quantity) || quantity < 1) {
+        showMessage('请输入有效数量', 'warning');
+        return;
+    }
+
+    try {
+        // 直接调用 addBookApi + 创建订购单
+        var bookResult = await addBookApi({
+            bookname: bookname,
+            isbn: isbn,
+            author: author,
+            price: price,
+            publisherId: publisherId,
+            typeId: typeId,
+            publishDate: publishDate
+        });
+
+        if (bookResult.code !== 200) {
+            showMessage(bookResult.message || '教材创建失败', 'error');
+            return;
+        }
+
+        // 通过ISBN查找刚创建的教材
+        var listResult = await getBookListApi({ keyword: isbn, pageNum: 1, pageSize: 1 });
+        var bookId = null;
+        if (listResult.code === 200 && listResult.data && listResult.data.rows && listResult.data.rows.length > 0) {
+            bookId = listResult.data.rows[0].bookId;
+        }
+
+        if (!bookId) {
+            showMessage('教材已创建但未能获取ID，请手动订购', 'warning');
+            closeModal('addBookModal');
+            loadTypeCardsAndStats();
+            return;
+        }
+
+        // 创建订购单
+        var userInfo = getStoredUserInfo();
+        var operatorId = userInfo ? userInfo.userId : 1;
+
+        var orderResult = await request('/orders', {
+            method: 'POST',
+            body: JSON.stringify({
+                merchantName: '系统订购',
+                merchantPhone: '-',
+                operatorId: operatorId,
+                demandId: null,
+                details: [{ bookId: bookId, quantity: quantity }]
+            })
+        });
+
+        if (orderResult.code === 200) {
+            showMessage('订购成功', 'success');
+            closeModal('addBookModal');
+            loadTypeCardsAndStats();
+            // 刷新仪表盘
+            if (typeof loadNavChartData === 'function') loadNavChartData();
+        } else {
+            showMessage(orderResult.message || '订购失败', 'error');
+        }
+    } catch (err) {
+        console.error('订购失败:', err);
+        showMessage('订购失败: ' + (err.message || '未知错误'), 'error');
+    }
+}
+
+// ---- 编辑教材模态框 ----
+
+function openEditBookModal(book) {
+    // 动态创建编辑表单
+    var existing = document.getElementById('editBookModal');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'editBookModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal">' +
+        '<div class="modal-header"><h3>编辑教材</h3><button class="modal-close" id="editBookModalClose">&times;</button></div>' +
+        '<form id="editBookForm">' +
+        '<div class="form-group"><label>教材名称</label><input type="text" id="editBookname" class="form-control" value="' + (book.bookname || '') + '" required></div>' +
+        '<div class="form-group"><label>ISBN</label><input type="text" id="editIsbn" class="form-control" value="' + (book.isbn || '') + '" required></div>' +
+        '<div class="form-group"><label>作者</label><input type="text" id="editAuthor" class="form-control" value="' + (book.author || '') + '" required></div>' +
+        '<div class="form-group"><label>价格</label><input type="number" id="editPrice" class="form-control" value="' + (book.price || 0) + '" step="0.01" required></div>' +
+        '<div class="form-group"><label>出版社ID</label><input type="number" id="editPublisherId" class="form-control" value="' + (book.publisherId || '') + '" required></div>' +
+        '<div class="form-group"><label>类型ID</label><input type="number" id="editTypeId" class="form-control" value="' + (book.typeId || '') + '" required></div>' +
+        '<div class="form-group"><label>出版日期</label><input type="date" id="editPublishDate" class="form-control" value="' + (book.publishDate || '') + '" required></div>' +
+        '<div class="modal-footer">' +
+        '<button type="button" id="editBookModalCancel" class="btn" style="background: rgba(0,0,0,0.05); color: #4a5568;">取消</button>' +
+        '<button type="submit" class="btn btn-primary">确认更新</button>' +
+        '</div></form></div>';
+
+    document.body.appendChild(modal);
+    openModal('editBookModal');
+
+    // 绑定关闭
+    document.getElementById('editBookModalClose').addEventListener('click', function () { closeModal('editBookModal'); });
+    document.getElementById('editBookModalCancel').addEventListener('click', function () { closeModal('editBookModal'); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) closeModal('editBookModal'); });
+
+    // 绑定提交
+    document.getElementById('editBookForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var params = {
+            bookname: document.getElementById('editBookname').value.trim(),
+            isbn: document.getElementById('editIsbn').value.trim(),
+            author: document.getElementById('editAuthor').value.trim(),
+            price: parseFloat(document.getElementById('editPrice').value),
+            publisherId: parseInt(document.getElementById('editPublisherId').value),
+            typeId: parseInt(document.getElementById('editTypeId').value),
+            publishDate: document.getElementById('editPublishDate').value
+        };
+
+        var res = await updateBookApi(book.bookId, params);
+        if (res.code === 200) {
+            showMessage('教材更新成功', 'success');
+            closeModal('editBookModal');
+            loadBooksIntoTable(currentBookTypeId, document.getElementById('bookSearchInput') ? document.getElementById('bookSearchInput').value : '');
+            loadTypeCardsAndStats();
+        } else {
+            showMessage(res.message || '更新失败', 'error');
+        }
+    });
+}
+
+// ============================================================
+// ██  出版社管理页 初始化
+// ============================================================
+
+async function initPublishersPage() {
+    await loadPublisherTable();
+
+    // 绑定添加按钮
+    var addBtn = document.getElementById('addPublisherBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            // 重置为添加模式
+            document.getElementById('publisherModalTitle').textContent = '添加出版社';
+            document.getElementById('addPublisherForm').reset();
+            document.getElementById('addPublisherForm').removeAttribute('data-edit-id');
+            openModal('addPublisherModal');
+        });
+    }
+
+    // 绑定模态框关闭
+    bindModalClose('addPublisherModal', ['publisherModalClose', 'publisherModalCancel']);
+
+    // 绑定表单提交
+    var form = document.getElementById('addPublisherForm');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            await submitPublisherForm();
+        });
+    }
+}
+
+async function loadPublisherTable() {
+    var tbody = document.getElementById('publisherTableBody');
+    if (!tbody) return;
+
+    try {
+        var result = await getPublisherListApi();
+        if (result.code !== 200 || !result.data) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>暂无出版社</p></td></tr>';
+            return;
+        }
+
+        var pubs = result.data;
+        if (pubs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>暂无出版社</p></td></tr>';
+            return;
+        }
+
+        var html = '';
+        pubs.forEach(function (p) {
+            html += '<tr>' +
+                '<td>' + p.publisherId + '</td>' +
+                '<td>' + (p.publisherName || '') + '</td>' +
+                '<td>' + (p.publishAddress || '') + '</td>' +
+                '<td>' + (p.publishPhone || '') + '</td>' +
+                '<td>' +
+                '<button class="btn btn-sm btn-edit-publisher" data-id="' + p.publisherId + '" data-permission="publisher:edit">编辑</button> ' +
+                '<button class="btn btn-sm btn-delete-publisher" data-id="' + p.publisherId + '" style="background: rgba(239,68,68,0.1); color: #ef4444;" data-permission="publisher:delete">删除</button>' +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+
+        // 绑定编辑
+        tbody.querySelectorAll('.btn-edit-publisher').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var pid = parseInt(this.getAttribute('data-id'));
+                var pub = pubs.find(function (p) { return p.publisherId === pid; });
+                if (pub) {
+                    document.getElementById('publisherModalTitle').textContent = '编辑出版社';
+                    document.getElementById('publisherName').value = pub.publisherName || '';
+                    document.getElementById('publishAddress').value = pub.publishAddress || '';
+                    document.getElementById('publishPhone').value = pub.publishPhone || '';
+                    document.getElementById('addPublisherForm').setAttribute('data-edit-id', pid);
+                    openModal('addPublisherModal');
+                }
+            });
+        });
+
+        // 绑定删除
+        tbody.querySelectorAll('.btn-delete-publisher').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+                var pid = parseInt(this.getAttribute('data-id'));
+                if (confirm('确定删除该出版社吗？如有教材关联，操作将失败。')) {
+                    var res = await deletePublisherApi(pid);
+                    if (res.code === 200) {
+                        showMessage('出版社已删除', 'success');
+                        loadPublisherTable();
+                    } else {
+                        showMessage(res.message || '删除失败（可能有教材关联）', 'error');
+                    }
+                }
+            });
+        });
+
+        applyPermissionVisibility();
+    } catch (err) {
+        console.error('加载出版社列表失败:', err);
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>加载失败</p></td></tr>';
+    }
+}
+
+async function submitPublisherForm() {
+    var name = document.getElementById('publisherName').value.trim();
+    var address = document.getElementById('publishAddress').value.trim();
+    var phone = document.getElementById('publishPhone').value.trim();
+
+    if (!name || !address || !phone) {
+        showMessage('请填写完整信息', 'warning');
+        return;
+    }
+
+    var editId = document.getElementById('addPublisherForm').getAttribute('data-edit-id');
+
+    try {
+        var result;
+        if (editId) {
+            result = await updatePublisherApi(parseInt(editId), {
+                publisherName: name,
+                publishAddress: address,
+                publishPhone: phone
+            });
+        } else {
+            result = await addPublisherApi({
+                publisherName: name,
+                publishAddress: address,
+                publishPhone: phone
+            });
+        }
+
+        if (result.code === 200) {
+            showMessage(editId ? '出版社更新成功' : '出版社添加成功', 'success');
+        } else {
+            showMessage(result.message || '操作失败', 'error');
+            return;
+        }
+
+        closeModal('addPublisherModal');
+        loadPublisherTable();
+    } catch (err) {
+        console.error('提交出版社失败:', err);
+        showMessage('操作失败: ' + (err.message || '未知错误'), 'error');
+    }
+}
+
+// ============================================================
+// ██  入库管理页 初始化
+// ============================================================
+
+async function initStockInPage() {
+    await loadPendingStock();
+
+    // 绑定入库表单提交
+    var form = document.getElementById('stockInForm');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            await submitStockInForm();
+        });
+    }
+
+    // 绑定"从待入库添加教材"按钮
+    var addDetailBtn = document.getElementById('addDetailBtn');
+    if (addDetailBtn) {
+        addDetailBtn.addEventListener('click', function () {
+            addStockInDetailRow();
+        });
+    }
+
+    // 加载入库历史
+    await loadStockInHistory();
+}
+
+async function loadPendingStock() {
+    var tbody = document.getElementById('pendingStockTableBody');
+    if (!tbody) return;
+
+    try {
+        var result = await getPendingStockApi();
+        if (result.code !== 200 || !result.data || result.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><p>暂无待入库教材</p></td></tr>';
+            return;
+        }
+
+        var html = '';
+        result.data.forEach(function (item) {
+            html += '<tr>' +
+                '<td>' + (item.bookId || '') + '</td>' +
+                '<td>' + (item.bookname || '') + '</td>' +
+                '<td>' + (item.isbn || '') + '</td>' +
+                '<td>' + (item.author || '') + '</td>' +
+                '<td>¥' + ((item.price || 0)).toFixed(2) + '</td>' +
+                '<td>' + (item.quantity || 0) + '</td>' +
+                '<td>' + (item.publisherName || '') + '</td>' +
+                '<td>' + (item.typeName || '') + '</td>' +
+                '<td>' +
+                '<button class="btn btn-sm btn-stockin-quick" data-book-id="' + item.bookId + '" data-book-name="' + (item.bookname || '') + '" data-quantity="' + (item.quantity || 0) + '" data-permission="stockin:create">快速入库</button>' +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+
+        // 绑定快速入库
+        tbody.querySelectorAll('.btn-stockin-quick').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var bookId = parseInt(this.getAttribute('data-book-id'));
+                var bookName = this.getAttribute('data-book-name');
+                var qty = parseInt(this.getAttribute('data-quantity'));
+                // 填充入库明细
+                addStockInDetailRow(bookId, bookName, qty);
+            });
+        });
+
+        applyPermissionVisibility();
+    } catch (err) {
+        console.error('加载待入库列表失败:', err);
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><p>加载失败</p></td></tr>';
+    }
+}
+
+function addStockInDetailRow(bookId, bookName, quantity) {
+    var container = document.getElementById('stockInDetails');
+    if (!container) return;
+
+    var row = document.createElement('div');
+    row.className = 'demand-detail-row';
+    row.innerHTML = '<input type="number" class="form-control stockin-book-id" placeholder="教材ID" value="' + (bookId || '') + '" style="flex: 1;" required>' +
+        '<input type="text" class="form-control stockin-book-name" placeholder="教材名称" value="' + (bookName || '') + '" style="flex: 2;" readonly>' +
+        '<input type="number" class="form-control stockin-quantity" placeholder="数量" min="1" value="' + (quantity || 1) + '" style="flex: 1;" required>' +
+        '<button type="button" class="btn btn-sm btn-remove-demand-row" style="background: rgba(239,68,68,0.1); color: #ef4444;">✕</button>';
+
+    container.appendChild(row);
+
+    row.querySelector('.btn-remove-demand-row').addEventListener('click', function () {
+        row.remove();
+    });
+}
+
+async function submitStockInForm() {
+    var dateInput = document.getElementById('stockInDate');
+    var operatorInput = document.getElementById('operatorId');
+
+    if (!operatorInput || !operatorInput.value) {
+        showMessage('请输入操作员ID', 'warning');
+        return;
+    }
+
+    var rows = document.querySelectorAll('#stockInDetails .demand-detail-row');
+    var details = [];
+    rows.forEach(function (row) {
+        var bookId = parseInt(row.querySelector('.stockin-book-id').value);
+        var quantity = parseInt(row.querySelector('.stockin-quantity').value);
+        if (bookId && quantity && quantity > 0) {
+            details.push({ bookId: bookId, quantity: quantity });
+        }
+    });
+
+    if (details.length === 0) {
+        showMessage('请至少添加一条入库明细', 'warning');
+        return;
+    }
+
+    var params = {
+        stockInDate: dateInput ? dateInput.value : new Date().toISOString().split('T')[0],
+        operatorId: parseInt(operatorInput.value),
+        details: details
+    };
+
+    try {
+        var result = await addStockInApi(params);
+        if (result.code === 200) {
+            showMessage('入库成功', 'success');
+            document.getElementById('stockInDetails').innerHTML = '';
+            loadPendingStock();
+            loadStockInHistory();
+            if (typeof loadNavChartData === 'function') loadNavChartData();
+            if (typeof loadTypeCardsAndStats === 'function') loadTypeCardsAndStats();
+        } else {
+            showMessage(result.message || '入库失败', 'error');
+        }
+    } catch (err) {
+        console.error('入库失败:', err);
+        showMessage('入库失败: ' + (err.message || '未知错误'), 'error');
+    }
+}
+
+async function loadStockInHistory() {
+    var container = document.getElementById('stockInHistoryContainer');
+    if (!container) return;
+
+    try {
+        var result = await getStockInHistoryApi();
+        if (result.code !== 200 || !result.data || result.data.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>暂无入库记录</p></div>';
+            return;
+        }
+
+        var html = '<div class="table-container"><table><thead><tr>' +
+            '<th>入库单号</th><th>日期</th><th>操作员</th><th>教材明细</th></tr></thead><tbody>';
+
+        result.data.forEach(function (record) {
+            var detailsStr = (record.details || []).map(function (d) {
+                return d.bookname + ' × ' + d.quantity;
+            }).join(', ');
+            html += '<tr>' +
+                '<td>#' + record.stockInId + '</td>' +
+                '<td>' + (record.stockInDate || '') + '</td>' +
+                '<td>' + (record.operatorName || '') + '</td>' +
+                '<td>' + detailsStr + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('加载入库历史失败:', err);
+    }
+}
+
+// ============================================================
+// ██  出库管理页 初始化
+// ============================================================
+
+async function initStockOutPage() {
+    // 绑定出库表单提交
+    var form = document.getElementById('stockOutForm');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            await submitStockOutForm();
+        });
+    }
+
+    // 绑定添加出库明细行按钮
+    var addBtn = document.getElementById('addOutDetailBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            addStockOutDetailRow();
+        });
+    }
+
+    // 加载出库历史
+    await loadStockOutHistory();
+}
+
+function addStockOutDetailRow() {
+    var container = document.getElementById('stockOutDetails');
+    if (!container) return;
+
+    var row = document.createElement('div');
+    row.className = 'demand-detail-row';
+    row.innerHTML = '<input type="number" class="form-control stockout-book-id" placeholder="教材ID" style="flex: 1;" required>' +
+        '<input type="number" class="form-control stockout-quantity" placeholder="数量" min="1" value="1" style="flex: 1;" required>' +
+        '<button type="button" class="btn btn-sm btn-remove-demand-row" style="background: rgba(239,68,68,0.1); color: #ef4444;">✕</button>';
+
+    container.appendChild(row);
+
+    row.querySelector('.btn-remove-demand-row').addEventListener('click', function () {
+        row.remove();
+    });
+}
+
+async function submitStockOutForm() {
+    var dateInput = document.getElementById('stockOutDate');
+    var operatorInput = document.getElementById('stockOutOperatorId');
+
+    if (!operatorInput || !operatorInput.value) {
+        showMessage('请输入操作员ID', 'warning');
+        return;
+    }
+
+    var rows = document.querySelectorAll('#stockOutDetails .demand-detail-row');
+    var details = [];
+    rows.forEach(function (row) {
+        var bookId = parseInt(row.querySelector('.stockout-book-id').value);
+        var quantity = parseInt(row.querySelector('.stockout-quantity').value);
+        if (bookId && quantity && quantity > 0) {
+            details.push({ bookId: bookId, quantity: quantity });
+        }
+    });
+
+    if (details.length === 0) {
+        showMessage('请至少添加一条出库明细', 'warning');
+        return;
+    }
+
+    var params = {
+        stockOutDate: dateInput ? dateInput.value : new Date().toISOString().split('T')[0],
+        operatorId: parseInt(operatorInput.value),
+        details: details
+    };
+
+    try {
+        var result = await addStockOutApi(params);
+        if (result.code === 200) {
+            showMessage('出库成功', 'success');
+            document.getElementById('stockOutDetails').innerHTML = '';
+            loadStockOutHistory();
+            if (typeof loadNavChartData === 'function') loadNavChartData();
+            if (typeof loadTypeCardsAndStats === 'function') loadTypeCardsAndStats();
+        } else {
+            showMessage(result.message || '出库失败', 'error');
+        }
+    } catch (err) {
+        console.error('出库失败:', err);
+        showMessage('出库失败: ' + (err.message || '未知错误'), 'error');
+    }
+}
+
+async function loadStockOutHistory() {
+    var container = document.getElementById('stockOutHistoryContainer');
+    if (!container) return;
+
+    try {
+        var result = await getStockOutHistoryApi();
+        if (result.code !== 200 || !result.data || result.data.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>暂无出库记录</p></div>';
+            return;
+        }
+
+        var html = '<div class="table-container"><table><thead><tr>' +
+            '<th>出库单号</th><th>日期</th><th>操作员</th><th>教材明细</th></tr></thead><tbody>';
+
+        result.data.forEach(function (record) {
+            var detailsStr = (record.details || []).map(function (d) {
+                return d.bookname + ' × ' + d.quantity;
+            }).join(', ');
+            html += '<tr>' +
+                '<td>#' + record.stockOutId + '</td>' +
+                '<td>' + (record.stockOutDate || '') + '</td>' +
+                '<td>' + (record.operatorName || '') + '</td>' +
+                '<td>' + detailsStr + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('加载出库历史失败:', err);
+    }
+}
+
+// ============================================================
+// ██  订购记录页 初始化
+// ============================================================
+
+async function initOrdersPage() {
+    var container = document.getElementById('orderHistoryContainer');
+    if (!container) return;
+
+    try {
+        var result = await getOrderHistoryApi();
+        if (result.code !== 200 || !result.data || result.data.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>暂无订购记录</p></div>';
+            return;
+        }
+
+        var html = '<div class="table-container"><table><thead><tr>' +
+            '<th>订购单号</th><th>教材名称</th><th>ISBN</th><th>数量</th><th>供应商</th><th>订购日期</th><th>操作员</th></tr></thead><tbody>';
+
+        result.data.forEach(function (row) {
+            html += '<tr>' +
+                '<td>#' + (row.OrderId || '') + '</td>' +
+                '<td>' + (row.Bookname || '') + '</td>' +
+                '<td>' + (row.ISBN || '') + '</td>' +
+                '<td>' + (row.Quantity || 0) + '</td>' +
+                '<td>' + (row.MerchantName || '') + '</td>' +
+                '<td>' + (row.OrderDate || '') + '</td>' +
+                '<td>' + (row.OperatorName || '') + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('加载订购记录失败:', err);
+        container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+    }
+}
+
+// ============================================================
+// ██  用户管理页 初始化
+// ============================================================
+
+async function initUsersPage() {
+    await loadUserTable();
+
+    // 绑定添加按钮
+    var addBtn = document.getElementById('addUserBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            document.getElementById('addUserForm').reset();
+            openModal('addUserModal');
+        });
+    }
+
+    // 绑定模态框关闭
+    bindModalClose('addUserModal', ['userModalClose', 'userModalCancel']);
+
+    // 绑定用户表单提交
+    var form = document.getElementById('addUserForm');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            await submitUserForm();
+        });
+    }
+}
+
+async function loadUserTable() {
+    var tbody = document.getElementById('userTableBody');
+    if (!tbody) return;
+
+    try {
+        var result = await getUserListApi();
+        if (result.code !== 200 || !result.data) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>暂无用户</p></td></tr>';
+            return;
+        }
+
+        var users = result.data;
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>暂无用户</p></td></tr>';
+            return;
+        }
+
+        var roleLabels = {
+            'Admin': '管理员',
+            'StockOperator': '库存操作员',
+            'DemandProvider': '需求提出者',
+            'Viewer': '只读人员'
+        };
+
+        var html = '';
+        users.forEach(function (u) {
+            html += '<tr>' +
+                '<td>' + u.userId + '</td>' +
+                '<td>' + (u.username || '') + '</td>' +
+                '<td>' + (u.displayName || '') + '</td>' +
+                '<td>' + (roleLabels[u.roleName] || u.roleName || '') + '</td>' +
+                '<td>' + (u.isActive ? '✅ 正常' : '❌ 禁用') + '</td>' +
+                '<td>' + (u.createdAt || '') + '</td>' +
+                '<td>' +
+                '<button class="btn btn-sm btn-delete-user" data-id="' + u.userId + '" style="background: rgba(239,68,68,0.1); color: #ef4444;" data-permission="user:delete">删除</button>' +
+                '</td>' +
+                '</tr>';
+        });
+        tbody.innerHTML = html;
+
+        // 绑定删除
+        tbody.querySelectorAll('.btn-delete-user').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+                var uid = parseInt(this.getAttribute('data-id'));
+                if (confirm('确定删除该用户吗？')) {
+                    var res = await deleteUserApi(uid);
+                    if (res.code === 200) {
+                        showMessage('用户已删除', 'success');
+                        loadUserTable();
+                    } else {
+                        showMessage(res.message || '删除失败', 'error');
+                    }
+                }
+            });
+        });
+
+        applyPermissionVisibility();
+    } catch (err) {
+        console.error('加载用户列表失败:', err);
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>加载失败</p></td></tr>';
+    }
+}
+
+async function submitUserForm() {
+    var username = document.getElementById('newUsername').value.trim();
+    var password = document.getElementById('newPassword').value.trim();
+    var displayName = document.getElementById('newDisplayName').value.trim();
+    var roleName = document.getElementById('newRole').value;
+
+    if (!username || !password || !displayName || !roleName) {
+        showMessage('请填写完整信息', 'warning');
+        return;
+    }
+
+    try {
+        var result = await addUserApi({
+            username: username,
+            password: password,
+            displayName: displayName,
+            roleName: roleName
+        });
+        if (result.code === 200) {
+            showMessage('用户添加成功', 'success');
+            closeModal('addUserModal');
+            loadUserTable();
+        } else {
+            showMessage(result.message || '添加失败', 'error');
+        }
+    } catch (err) {
+        console.error('添加用户失败:', err);
+        showMessage('添加失败: ' + (err.message || '未知错误'), 'error');
+    }
+}
+
+// ============================================================
+// 通用模态框关闭绑定辅助函数
+// ============================================================
+
+function bindModalClose(modalId, buttonIds) {
+    var modal = document.getElementById(modalId);
+    if (!modal) return;
+
+    // 绑定关闭按钮
+    buttonIds.forEach(function (btnId) {
+        var btn = document.getElementById(btnId);
+        if (btn) {
+            btn.addEventListener('click', function () {
+                closeModal(modalId);
+            });
+        }
+    });
+
+    // 点击遮罩层关闭
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+            closeModal(modalId);
+        }
     });
 }

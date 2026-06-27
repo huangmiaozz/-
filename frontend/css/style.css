@@ -2941,3 +2941,119 @@ textarea.no-permission {
     color: #718096;
     border: 1px solid rgba(160, 174, 192, 0.3);
 }
+
+/* ============================================================
+   需求卡片列表 & 明细行样式
+   ============================================================ */
+.demand-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.demand-detail-mini {
+    list-style: none;
+    padding: 6px 0 0 0;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.demand-detail-mini li {
+    padding: 2px 0;
+}
+
+.demand-detail-mini li::before {
+    content: '📖 ';
+}
+
+.demand-card-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
+
+.demand-card-notes {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 0;
+    font-style: italic;
+}
+
+.demand-card-actions {
+    padding-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.demand-detail-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.detail-section {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.detail-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+.btn-remove-demand-row {
+    padding: 6px 10px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.btn-cancel-demand {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    cursor: pointer;
+}
+
+.btn-cancel-demand:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+/* 库存表单内的教材ID/名称输入 */
+.stockin-book-id,
+.stockout-book-id {
+    min-width: 80px;
+}
+
+.stockin-book-name {
+    min-width: 120px;
+    background: rgba(0, 0, 0, 0.03) !important;
+}
+
+.stockin-quantity,
+.stockout-quantity {
+    min-width: 80px;
+}
+
+.field-hint {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}

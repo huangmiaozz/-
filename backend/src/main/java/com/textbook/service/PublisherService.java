@@ -46,6 +46,15 @@ public class PublisherService {
     }
 
     /**
+     * 更新出版社
+     */
+    @Transactional
+    public void update(Integer publisherId, PublisherDTO dto) {
+        String sql = "UPDATE Publishers SET PublisherName=?, PublishAddress=?, PublishPhone=? WHERE PublisherId=?";
+        jdbc.update(sql, dto.getPublisherName(), dto.getPublishAddress(), dto.getPublishPhone(), publisherId);
+    }
+
+    /**
      * 删除出版社（注意：如果有关联教材，外键约束会阻止删除）
      */
     @Transactional

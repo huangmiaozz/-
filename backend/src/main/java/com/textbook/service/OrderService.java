@@ -45,6 +45,12 @@ public class OrderService {
                     dto.getDemandId(), dto.getMerchantName(), dto.getMerchantPhone(),
                     dateStr, dto.getOperatorId());
         }
+
+        // 如果关联了需求，将需求状态更新为 'ordered'
+        if (dto.getDemandId() != null) {
+            jdbc.update("UPDATE BookDemands SET Status = 'ordered' WHERE DemandId = ? AND Status = 'active'",
+                    dto.getDemandId());
+        }
     }
 
     @Transactional

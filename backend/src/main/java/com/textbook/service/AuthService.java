@@ -39,9 +39,12 @@ public class AuthService {
     private List<String> getPermissionsByRole(String roleName) {
         return switch (roleName) {
             case "Admin" -> List.of(
+                // 全部查看权限
                 "book:view", "demand:view", "order:view", "stockin:view", "stockout:view",
                 "publisher:view", "statistics:view",
+                // 用户管理
                 "user:view", "user:create", "user:edit", "user:delete",
+                // 角色管理
                 "role:manage"
             );
             case "StockOperator" -> List.of(

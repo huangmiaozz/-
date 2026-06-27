@@ -1,14 +1,17 @@
 package com.textbook.model.entity;
 
 /**
- * 订购主表实体 — 对应 BookOrder 表
+ * 订购主表实体 — 对应 BookOrder 表（v3.0 合并版：主从双表合一）
  *
  * 数据库字段:
- *   OrderId, DemandId, MerchantName, MerchantPhone, Operator, OrderDate
+ *   OrderId, BookId, Quantity, DemandId, MerchantName, MerchantPhone, OrderDate, Operator
+ * 复合主键: (OrderId, BookId)
  */
 public class BookOrder {
 
-    private Integer orderId;            // 订购ID（自增主键）
+    private Integer orderId;            // 订购ID（复合主键之一）
+    private Integer bookId;             // 教材ID（复合主键之一，外键 → TextBooks）
+    private Integer quantity;           // 订购数量
     private Integer demandId;           // 关联需求ID（可为空）
     private String merchantName;        // 供应商名称
     private String merchantPhone;       // 供应商电话
@@ -17,11 +20,18 @@ public class BookOrder {
 
     // ---- 关联字段 ----
     private String operatorName;        // 操作员名称（JOIN Users）
+    private String bookname;            // 教材名称（JOIN TextBooks）
 
     // ===== Getter/Setter =====
 
     public Integer getOrderId() { return orderId; }
     public void setOrderId(Integer orderId) { this.orderId = orderId; }
+
+    public Integer getBookId() { return bookId; }
+    public void setBookId(Integer bookId) { this.bookId = bookId; }
+
+    public Integer getQuantity() { return quantity; }
+    public void setQuantity(Integer quantity) { this.quantity = quantity; }
 
     public Integer getDemandId() { return demandId; }
     public void setDemandId(Integer demandId) { this.demandId = demandId; }
@@ -40,4 +50,7 @@ public class BookOrder {
 
     public String getOperatorName() { return operatorName; }
     public void setOperatorName(String operatorName) { this.operatorName = operatorName; }
+
+    public String getBookname() { return bookname; }
+    public void setBookname(String bookname) { this.bookname = bookname; }
 }
